@@ -4,7 +4,7 @@
 // 	protoc        v5.29.3
 // source: proto/student.proto
 
-package student
+package proto
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -505,7 +505,7 @@ const file_proto_student_proto_rawDesc = "" +
 	"GetStudent\x12\x1a.student.GetStudentRequest\x1a\x1b.student.GetStudentResponse\x12F\n" +
 	"\rUpdateStudent\x12\x1d.student.UpdateStudentRequest\x1a\x16.google.protobuf.Empty\x12F\n" +
 	"\rDeleteStudent\x12\x1d.student.DeleteStudentRequest\x1a\x16.google.protobuf.Empty\x12K\n" +
-	"\fListStudents\x12\x1c.student.ListStudentsRequest\x1a\x1d.student.ListStudentsResponseB5Z3github.com/Albertthea/student-service/proto;studentb\x06proto3"
+	"\fListStudents\x12\x1c.student.ListStudentsRequest\x1a\x1d.student.ListStudentsResponseB)Z'example.com/student-service/proto;protob\x06proto3"
 
 var (
 	file_proto_student_proto_rawDescOnce sync.Once

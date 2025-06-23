@@ -6,7 +6,7 @@ import "google/protobuf/empty.proto";
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/Albertthea/student-service/proto;student";
+option go_package = "example.com/student-service/proto;proto";
 
 message Student {
     string id = 1;

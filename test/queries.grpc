@@ -1,0 +1,31 @@
+// CreateStudent
+grpcurl -plaintext -d '{
+  "first_name": "Ivan",
+  "last_name": "Petrov",
+  "grade": 9
+}' localhost:50051 student.StudentService/CreateStudent
+
+// GetStudent
+grpcurl -plaintext -d '{
+  "id": "80502680-2845-4b24-8aa7-597959d97437"
+}' localhost:50051 student.StudentService/GetStudent
+
+// UpdateStudent
+grpcurl -plaintext -d '{
+  "student": {
+    "id": "80502680-2845-4b24-8aa7-597959d97437",
+    "first_name": "Ivan",
+    "last_name": "Ivanov",
+    "grade": 10
+  }
+}' localhost:50051 student.StudentService/UpdateStudent
+
+// DeleteStudent
+grpcurl -plaintext -d '{
+  "id": "80502680-2845-4b24-8aa7-597959d97437"
+}' localhost:50051 student.StudentService/DeleteStudent
+
+// ListStudents
+grpcurl -plaintext -d '{
+  "grade": 9
+}' localhost:50051 student.StudentService/ListStudents

@@ -7,7 +7,7 @@ import (
     "time"
 
     "github.com/google/uuid"
-    "student-service/proto" 
+    "example.com/student-service/proto" 
     "google.golang.org/protobuf/types/known/emptypb"
     "google.golang.org/protobuf/types/known/timestamppb"
 )
