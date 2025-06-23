@@ -1,8 +1,46 @@
+### Create Student
 POST localhost:50051/proto.StudentService/CreateStudent
 Content-Type: application/json
 
 {
   "first_name": "Ivan",
   "last_name": "Petrov",
+  "grade": 9
+}
+
+### Get Student
+POST localhost:50051/proto.StudentService/GetStudent
+Content-Type: application/json
+
+{
+  "id": "ВСТАВЬ_СЮДА_ID"
+}
+
+### Update Student
+POST localhost:50051/proto.StudentService/UpdateStudent
+Content-Type: application/json
+
+{
+  "student": {
+    "id": "ВСТАВЬ_СЮДА_ID",
+    "first_name": "Ivan",
+    "last_name": "Ivanov",
+    "grade": 10
+  }
+}
+
+### Delete Student
+POST localhost:50051/proto.StudentService/DeleteStudent
+Content-Type: application/json
+
+{
+  "id": "ВСТАВЬ_СЮДА_ID"
+}
+
+### List Students
+POST localhost:50051/proto.StudentService/ListStudents
+Content-Type: application/json
+
+{
   "grade": 9
 }
