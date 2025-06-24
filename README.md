@@ -3,7 +3,17 @@
 Простое gRPC-приложение на Go для управления данными студентов.
 
 ## Структура проекта
-<pre> ```text student-service/ ├── go.mod ├── main.go ├── proto/ │ ├── student.proto │ ├── student.pb.go │ └── student_grpc.pb.go ├── server/ │ └── service.go ``` </pre>
+```text
+student-service/
+├── go.mod
+├── main.go
+├── proto/
+│   ├── student.proto
+│   ├── student.pb.go
+│   └── student_grpc.pb.go
+├── server/
+│   └── service.go
+```
 
 ## Установка зависимостей
 
