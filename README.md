@@ -4,20 +4,7 @@
 
 ## Структура проекта
 
-student-service/
-├── go.mod
-├── main.go
-├── proto/
-│ ├── student.proto
-│ ├── student.pb.go
-│ └── student_grpc.pb.go
-├── server/
-│ └── service.go
-
-perl
-Копировать
-Редактировать
-
+<pre lang="markdown"> ## Структура проекта ``` student-service/ ├── go.mod ├── main.go ├── proto/ │ ├── student.proto │ ├── student.pb.go │ └── student_grpc.pb.go ├── server/ │ └── service.go ``` </pre>
 ## Установка зависимостей
 
 ```bash
@@ -26,21 +13,15 @@ go mod tidy
 Перед генерацией убедитесь, что установлены необходимые плагины:
 
 bash
-Копировать
-Редактировать
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0
 Добавьте ~/go/bin в PATH, если это не сделано:
 
 bash
-Копировать
-Редактировать
 export PATH="$PATH:$(go env GOPATH)/bin"
 Сгенерируйте .pb.go файлы:
 
 bash
-Копировать
-Редактировать
 protoc \
   --go_out=paths=source_relative:. \
   --go-grpc_out=paths=source_relative:. \
