@@ -84,6 +84,8 @@ grpcurl -plaintext -d '{
 ## Requirements
 Go 1.20+
 
-Protocol Buffers compiler (protoc)
+Protocol Buffers compiler (protoc) >= 3.21.0
 
-gRPC codegen plugins (protoc-gen-go, protoc-gen-go-grpc)
+gRPC codegen plugins
+  protoc-gen-go v1.30.0+
+  protoc-gen-go-grpc v1.3.0+
