@@ -7,7 +7,7 @@ A simple gRPC-based service written in Go for managing student data.
 student-service/
 ├── cmd/         # Application entry point(s)
 ├── proto/       # Protobuf definitions
-├── server/      # Business logic and gRPC service implementation
+├── service/      # Business logic and gRPC service implementation
 ├── go.mod       # Go module definition
 ```
 
