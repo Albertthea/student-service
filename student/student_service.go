@@ -1,4 +1,4 @@
-package server
+package service
 
 import (
     "context"
@@ -8,6 +8,8 @@ import (
 
     "github.com/google/uuid"
     "example.com/student-service/proto" 
+    "google.golang.org/grpc/codes"
+    "google.golang.org/grpc/status"
     "google.golang.org/protobuf/types/known/emptypb"
     "google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -112,7 +114,7 @@ func (s *StudentServer) DeleteStudent(ctx context.Context, req *proto.DeleteStud
     student := req.Id
 
     if _, ok := s.store.students[student]; !ok {
-        return nil, errors.New("student not found")
+        return nil, status.Errorf(codes.NotFound, "student not found")
     }
 
     delete(s.store.students, student)

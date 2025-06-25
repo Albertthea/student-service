@@ -5,7 +5,7 @@ import (
     "net"
 
     "example.com/student-service/proto"
-    "example.com/student-service/server"
+    "example.com/student-service/service"
     "google.golang.org/grpc/reflection"
     "google.golang.org/grpc"
 )
