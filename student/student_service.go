@@ -85,6 +85,13 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
         return nil, errors.New("student not found")
     }
 
+    if student.CreatedAt != nil {
+        updatedCreatedAt := student.CreatedAt.AsTime()
+        if !updatedCreatedAt.Equal(stored.CreatedAt) {
+            return nil, errors.New("created_at field cannot be modified")
+        }
+    }
+
     if student.Grade < stored.Grade {
         return nil, errors.New("grade cannot be decreased")
     }
@@ -94,7 +101,6 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
     stored.Grade = student.Grade
 
     s.store.students[student.Id] = stored
-    s.store.mu.Unlock()
 
     return &emptypb.Empty{}, nil
 }
@@ -103,13 +109,13 @@ func (s *StudentServer) DeleteStudent(ctx context.Context, req *proto.DeleteStud
     s.store.mu.Lock()
     defer s.store.mu.Unlock()
 
-    pupul := req.Id
+    student := req.Id
 
-    if _, ok := s.store.students[pupul]; !ok {
+    if _, ok := s.store.students[student]; !ok {
         return nil, errors.New("student not found")
     }
 
-    delete(s.store.students, pupul)
+    delete(s.store.students, student)
     return &emptypb.Empty{}, nil
 }
 
