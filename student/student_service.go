@@ -63,7 +63,7 @@ func (s *StudentServer) GetStudent(ctx context.Context, req *proto.GetStudentReq
     s.store.mu.RUnlock()
 
     if !ok {
-        return nil, errors.New("student not found")
+        return nil, status.Errorf(codes.NotFound, "student with id %s not found", req.Id)
     }
 
     return &proto.GetStudentResponse{
@@ -84,18 +84,18 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
     defer s.store.mu.Unlock()
     stored, ok := s.store.students[student.Id]
     if !ok {
-        return nil, errors.New("student not found")
+        return nil, status.Errorf(codes.NotFound, "student with id %s not found", student.Id)
     }
 
     if student.CreatedAt != nil {
         updatedCreatedAt := student.CreatedAt.AsTime()
         if !updatedCreatedAt.Equal(stored.CreatedAt) {
-            return nil, errors.New("created_at field cannot be modified")
+            return nil, status.Errorf(codes.InvalidArgument, "created_at field cannot be modified")
         }
     }
 
     if student.Grade < stored.Grade {
-        return nil, errors.New("grade cannot be decreased")
+        return nil, status.Errorf(codes.FailedPrecondition, "grade cannot be decreased")
     }
 
     stored.FirstName = student.FirstName
