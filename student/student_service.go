@@ -79,14 +79,13 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
     student := req.Student
 
     s.store.mu.Lock()
+    defer s.store.mu.Unlock()
     stored, ok := s.store.students[student.Id]
     if !ok {
-        s.store.mu.Unlock()
         return nil, errors.New("student not found")
     }
 
     if student.Grade < stored.Grade {
-        s.store.mu.Unlock()
         return nil, errors.New("grade cannot be decreased")
     }
 
