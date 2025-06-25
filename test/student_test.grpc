@@ -13,7 +13,7 @@ POST localhost:50051/proto.StudentService/GetStudent
 Content-Type: application/json
 
 {
-  "id": "ВСТАВЬ_СЮДА_ID"
+  "id": "PASTE_ID_HERE"
 }
 
 ### Update Student
@@ -22,7 +22,7 @@ Content-Type: application/json
 
 {
   "student": {
-    "id": "ВСТАВЬ_СЮДА_ID",
+    "id": "PASTE_ID_HERE",
     "first_name": "Ivan",
     "last_name": "Ivanov",
     "grade": 10
@@ -34,7 +34,7 @@ POST localhost:50051/proto.StudentService/DeleteStudent
 Content-Type: application/json
 
 {
-  "id": "ВСТАВЬ_СЮДА_ID"
+  "id": "PASTE_ID_HERE"
 }
 
 ### List Students
