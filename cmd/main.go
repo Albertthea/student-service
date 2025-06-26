@@ -17,7 +17,7 @@ func main() {
     }
 
     grpcServer := grpc.NewServer()
-    proto.RegisterStudentServiceServer(grpcServer, server.NewStudentServer())
+    proto.RegisterStudentServiceServer(grpcServer, service.NewStudentServer())
 
     reflection.Register(grpcServer)
     log.Println("gRPC server started on :50051")
