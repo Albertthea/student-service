@@ -1,9 +1,10 @@
 module example.com/student-service
 
-go 1.23
+go 1.23.0
+
+toolchain go1.24.4
 
 require (
-	github.com/google/uuid v1.6.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
 )
