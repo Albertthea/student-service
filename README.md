@@ -84,7 +84,9 @@ grpcurl -plaintext -d '{
 ### Linting
 Using golangci-lint for static analysis.
 
-Local Run
+
+Local Run Install golangci-lint:
+
 Install golangci-lint:
 
 ```bash
