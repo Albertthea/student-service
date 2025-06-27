@@ -84,17 +84,23 @@ grpcurl -plaintext -d '{
 ### Linting
 Using golangci-lint for static analysis.
 
+
 Local Run Install golangci-lint:
+
+Install golangci-lint:
 
 ```bash
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 ```
 
 Run the linter:
+
 ```bash
 golangci-lint run
 ```
-GitHub Actions Linting also runs on every push and pull request to main via GitHub Actions.
+
+GitHub Actions
+Linting also runs on every push and pull request to main via GitHub Actions.
 
 Workflow config: .github/workflows/lint.yml
 
