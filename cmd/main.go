@@ -17,13 +17,8 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-<<<<<<< Updated upstream
-    grpcServer := grpc.NewServer()
-    proto.RegisterStudentServiceServer(grpcServer, server.NewStudentServer())
-=======
 	grpcServer := grpc.NewServer()
 	proto.RegisterStudentServiceServer(grpcServer, service.NewStudentServer())
->>>>>>> Stashed changes
 
 	reflection.Register(grpcServer)
 	log.Println("gRPC server started on :50051")

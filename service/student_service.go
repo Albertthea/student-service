@@ -2,16 +2,10 @@
 package service
 
 import (
-<<<<<<< Updated upstream:student/student_service.go
-    "context"
-    "errors"
-    "sync"
-    "time"
-=======
+
 	"context"
 	"sync"
 	"time"
->>>>>>> Stashed changes:service/student_service.go
 
 	"example.com/student-service/proto"
 	"github.com/google/uuid"
