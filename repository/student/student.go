@@ -7,6 +7,12 @@ import (
 	"database/sql"
 	"log"
 	"time"
+	"errors"
+)
+
+var (
+	ErrNotFound = errors.New("student not found")
+	ErrAlreadyExists  = errors.New("student already exists")
 )
 
 // Student represents a student record in the database.
@@ -30,11 +36,25 @@ func NewRepository(db *sql.DB) *Repository {
 
 // Create inserts a new student record into the database.
 func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
-	_, err := r.db.ExecContext(ctx,
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+
+	_, err := tx.ExecContext(ctx,
 		`INSERT INTO students (id, first_name, last_name, grade, created_at)
 		 VALUES ($1, $2, $3, $4, $5)`,
 		s.ID, s.FirstName, s.LastName, s.Grade, s.CreatedAt,
 	)
+	if err != nil {
+		tx.Rollback()
+		return "", err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+
 	return s.ID, err
 }
 
@@ -44,23 +64,66 @@ func (r *Repository) GetByID(ctx context.Context, id string) (Student, error) {
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, first_name, last_name, grade, created_at FROM students WHERE id = $1`, id).
 		Scan(&s.ID, &s.FirstName, &s.LastName, &s.Grade, &s.CreatedAt)
-	return s, err
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Student{}, ErrNotFound
+		}
+		return Student{}, err
+	}
+	return s, nil
 }
 
 // Update modifies an existing student record.
 func (r *Repository) Update(ctx context.Context, s Student) error {
-	_, err := r.db.ExecContext(ctx,
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	result, err := tx.ExecContext(ctx,
 		`UPDATE students SET first_name = $1, last_name = $2, grade = $3 WHERE id = $4`,
 		s.FirstName, s.LastName, s.Grade, s.ID,
 	)
-	return err
+
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if rowsAffected == 0 {
+		tx.Rollback()
+		return ErrNotFound
+	}
+	return tx.Commit()
 }
 
 // Delete removes a student record by ID.
 func (r *Repository) Delete(ctx context.Context, id string) error {
-	_, err := r.db.ExecContext(ctx,
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	
+	result, err := tx.ExecContext(ctx,
 		`DELETE FROM students WHERE id = $1`, id)
-	return err
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if rowsAffected == 0 {
+		tx.Rollback()
+		return ErrNotFound
+	}
+	return tx.Commit()
 }
 
 // ListByGrade returns all students for a specific grade.
