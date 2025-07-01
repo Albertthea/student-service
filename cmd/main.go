@@ -5,11 +5,10 @@ import (
 	"database/sql"
 	"log"
 	"net"
-	"os"
 
 	"example.com/student-service/proto"
-	"example.com/student-service/service"
 	"example.com/student-service/repository/student"
+	"example.com/student-service/service"
 
 	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
@@ -17,18 +16,23 @@ import (
 )
 
 func main() {
-	dsn := "host=localhost port=5432 user=student password=111111 dbname=studentdb sslmode=disable"
+	dsn := "host=localhost port=5434 user=student password=111111 dbname=studentdb sslmode=disable"
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatalf("failed to connect to db: %v", err)
 	}
 
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("failed to close db: %v", err)
+		}
+	}()
+
 	if err := db.Ping(); err != nil {
 		log.Fatalf("db is unreachable: %v", err)
 	}
 
-	repo := student.NewStudentRepository(db)
+	repo := student.NewRepository(db)
 	svc := service.NewStudentServer(repo)
 
 	lis, err := net.Listen("tcp", ":50051")

@@ -1,28 +1,35 @@
+// Package student provides the data structures and repository methods
+// for managing student records.
 package student
 
 import (
 	"context"
 	"database/sql"
+	"log"
 	"time"
 )
 
+// Student represents a student record in the database.
 type Student struct {
-	ID         string
-	FirstName  string
-	LastName   string
-	Grade      int32
-	CreatedAt  time.Time
+	ID        string
+	FirstName string
+	LastName  string
+	Grade     int32
+	CreatedAt time.Time
 }
 
-type StudentRepository struct {
+// Repository manages operations with students in the DB.
+type Repository struct {
 	db *sql.DB
 }
 
-func NewStudentRepository(db *sql.DB) *StudentRepository {
-	return &StudentRepository{db: db}
+// NewRepository creates a new Repository with the given DB connection.
+func NewRepository(db *sql.DB) *Repository {
+	return &Repository{db: db}
 }
 
-func (r *StudentRepository) Create(ctx context.Context, s Student) (string, error) {
+// Create inserts a new student record into the database.
+func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO students (id, first_name, last_name, grade, created_at)
 		 VALUES ($1, $2, $3, $4, $5)`,
@@ -31,7 +38,8 @@ func (r *StudentRepository) Create(ctx context.Context, s Student) (string, erro
 	return s.ID, err
 }
 
-func (r *StudentRepository) GetByID(ctx context.Context, id string) (Student, error) {
+// GetByID retrieves a student by their ID.
+func (r *Repository) GetByID(ctx context.Context, id string) (Student, error) {
 	var s Student
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, first_name, last_name, grade, created_at FROM students WHERE id = $1`, id).
@@ -39,7 +47,8 @@ func (r *StudentRepository) GetByID(ctx context.Context, id string) (Student, er
 	return s, err
 }
 
-func (r *StudentRepository) Update(ctx context.Context, s Student) error {
+// Update modifies an existing student record.
+func (r *Repository) Update(ctx context.Context, s Student) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE students SET first_name = $1, last_name = $2, grade = $3 WHERE id = $4`,
 		s.FirstName, s.LastName, s.Grade, s.ID,
@@ -47,19 +56,26 @@ func (r *StudentRepository) Update(ctx context.Context, s Student) error {
 	return err
 }
 
-func (r *StudentRepository) Delete(ctx context.Context, id string) error {
+// Delete removes a student record by ID.
+func (r *Repository) Delete(ctx context.Context, id string) error {
 	_, err := r.db.ExecContext(ctx,
 		`DELETE FROM students WHERE id = $1`, id)
 	return err
 }
 
-func (r *StudentRepository) ListByGrade(ctx context.Context, grade int32) ([]Student, error) {
+// ListByGrade returns all students for a specific grade.
+func (r *Repository) ListByGrade(ctx context.Context, grade int32) ([]Student, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, first_name, last_name, grade, created_at FROM students WHERE grade = $1`, grade)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 
 	var result []Student
 	for rows.Next() {

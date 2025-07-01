@@ -18,11 +18,11 @@ import (
 // StudentServer implements the StudentServiceServer gRPC interface.
 type StudentServer struct {
 	proto.UnimplementedStudentServiceServer
-	repo *student.StudentRepository
+	repo *student.Repository
 }
 
 // NewStudentServer creates a new instance of StudentServer.
-func NewStudentServer(repo *student.StudentRepository) *StudentServer {
+func NewStudentServer(repo *student.Repository) *StudentServer {
 	return &StudentServer{
 		repo: repo,
 	}
@@ -87,11 +87,11 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
 	}
 
 	updated := student.Student{
-		ID:         req.Student.Id,
-		FirstName:  req.Student.FirstName,
-		LastName: req.Student.LastName,
-		Grade:      req.Student.Grade,
-		CreatedAt:  existing.CreatedAt,
+		ID:        req.Student.Id,
+		FirstName: req.Student.FirstName,
+		LastName:  req.Student.LastName,
+		Grade:     req.Student.Grade,
+		CreatedAt: existing.CreatedAt,
 	}
 
 	if err := s.repo.Update(ctx, updated); err != nil {
