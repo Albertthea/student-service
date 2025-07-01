@@ -10,7 +10,7 @@ import (
 	"example.com/student-service/repository/student"
 	"example.com/student-service/service"
 
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // import PostgreSQL driver
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -33,7 +33,7 @@ func main() {
 	}
 
 	repo := student.NewRepository(db)
-	svc := service.NewStudentServer(repo)
+	studentService := service.NewStudentServer(repo)
 
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -41,7 +41,7 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	proto.RegisterStudentServiceServer(grpcServer, svc)
+	proto.RegisterStudentServiceServer(grpcServer, studentService)
 	reflection.Register(grpcServer)
 
 	log.Println("gRPC server started on :50051")
