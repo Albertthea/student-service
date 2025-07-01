@@ -1,14 +1,18 @@
 # student-service
 
-A simple gRPC-based service written in Go for managing student data.
+A simple gRPC-based service written in Go for managing student data.  
+Uses PostgreSQL for persistent storage, running via Docker for local development and testing.
 
 ## Project Structure
 ```text
 student-service/
-├── cmd/         # Application entry point(s)
-├── proto/       # Protobuf definitions
-├── service/      # Business logic and gRPC service implementation
-├── go.mod       # Go module definition
+├── cmd/                        # Application entry point(s)
+├── proto/                      # Protobuf definitions
+├── repository/student/         # DB model and repository logic
+├── repository/migrations/      # SQL migrations
+├── service/                    # Business logic and gRPC service implementation
+├── docker-compose.yml          # PostgreSQL container setup
+├── go.mod / go.sum             # Go module definition
 ```
 
 ## Code Generation
@@ -35,6 +39,25 @@ go run cmd/main.go
 ```
 
 The server listens on port `:50051`.
+
+## Run PostgreSQL via Docker
+```bash
+docker-compose up -d
+```
+
+It starts a postgres:15 container with:
+User: student
+Password: 111111
+Database: studentdb
+Port: 5432
+
+## Run DB Migration
+After the container is up, apply the initial schema:
+
+```bash
+psql -h localhost -U student -d studentdb -f repository/migrations/00000_initial.sql
+```
+Password: 111111
 
 ## Testing with grpcurl
 
@@ -106,6 +129,7 @@ Workflow config: .github/workflows/lint.yml
 
 ## Requirements
 Go 1.20+
+Docker + docker-compose
 
 Protocol Buffers compiler (protoc) >= 3.21.0
 
