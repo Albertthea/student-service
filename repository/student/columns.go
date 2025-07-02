@@ -31,8 +31,8 @@ func NamedPlaceholders() string {
 	return "(" + strings.Join(placeholders, ", ") + ")"
 }
 
-// UpdateSetStr возвращает строку для SET в UPDATE запросе, например:
-// "first_name = $1, last_name = $2, grade = $3, created_at = $4"
+// UpdateSetStr returns the SET clause string for an UPDATE query.
+// For example: "first_name = $1, last_name = $2, grade = $3, created_at = $4"
 func UpdateSetStr() string {
 	var sets []string
 	for _, col := range Columns {
