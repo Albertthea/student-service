@@ -21,3 +21,25 @@ func Placeholders(n int) string {
 	}
 	return "(" + strings.Join(params, ", ") + ")"
 }
+
+// NamedPlaceholders returns a string of named SQL placeholders for all columns.
+func NamedPlaceholders() string {
+	var placeholders []string
+	for _, col := range Columns {
+		placeholders = append(placeholders, ":"+col)
+	}
+	return "(" + strings.Join(placeholders, ", ") + ")"
+}
+
+// UpdateSetStr возвращает строку для SET в UPDATE запросе, например:
+// "first_name = $1, last_name = $2, grade = $3, created_at = $4"
+func UpdateSetStr() string {
+	var sets []string
+	for _, col := range Columns {
+		if col == "id" {
+			continue
+		}
+		sets = append(sets, fmt.Sprintf("%s = :%s", col, col))
+	}
+	return strings.Join(sets, ", ")
+}

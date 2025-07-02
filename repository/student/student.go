@@ -48,8 +48,7 @@ func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 		return "", err
 	}
 
-	query := fmt.Sprintf(`INSERT INTO %s (id, first_name, last_name, grade, created_at)
-	VALUES (:id, :first_name, :last_name, :grade, :created_at)`, tableName)
+	query := fmt.Sprintf(`INSERT INTO %s (%s) VALUES %s`, tableName, ColumnsStr(), NamedPlaceholders())
 
 	_, err = tx.NamedExecContext(ctx, query, &s)
 
@@ -95,7 +94,8 @@ func (r *Repository) Update(ctx context.Context, s Student) error {
 		}
 	}()
 
-	query := fmt.Sprintf(`UPDATE %s SET first_name = :first_name, last_name = :last_name, grade = :grade WHERE id = :id`, tableName)
+	query := fmt.Sprintf(`UPDATE %s SET %s WHERE id = :id`, tableName, UpdateSetStr())
+
 	result, err := tx.NamedExecContext(ctx, query, &s)
 	if err != nil {
 		return err
