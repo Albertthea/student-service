@@ -45,7 +45,7 @@ func NewRepository(db *sqlx.DB) *Repository {
 func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("create student: begin tx: %w", err)
 	}
 
 	query := fmt.Sprintf(`INSERT INTO %s (%s) VALUES %s`, tableName, ColumnsStr(), NamedPlaceholders())
@@ -56,11 +56,11 @@ func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 		if rbErr := tx.Rollback(); rbErr != nil {
 			log.Printf("tx.Rollback error: %v", rbErr)
 		}
-		return "", err
+		return "", fmt.Errorf("create student: insert: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return "", err
+		return "", fmt.Errorf("create student: commit: %w", err)
 	}
 
 	return s.ID, nil
@@ -75,7 +75,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Student, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("get student by id: %w", err)
 	}
 	return &s, nil
 }
@@ -84,7 +84,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Student, error) {
 func (r *Repository) Update(ctx context.Context, s Student) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("update student: begin tx: %w", err)
 	}
 	defer func() {
 		if err != nil {
@@ -98,12 +98,12 @@ func (r *Repository) Update(ctx context.Context, s Student) error {
 
 	result, err := tx.NamedExecContext(ctx, query, &s)
 	if err != nil {
-		return err
+		return fmt.Errorf("update student: exec update: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("update student: rows affected check: %w", err)
 	}
 
 	if rowsAffected == 0 {
@@ -117,7 +117,7 @@ func (r *Repository) Update(ctx context.Context, s Student) error {
 func (r *Repository) Delete(ctx context.Context, id string) error {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("delete student: begin tx: %w", err)
 	}
 
 	query := fmt.Sprintf(`DELETE FROM %s WHERE id = $1`, tableName)
@@ -127,14 +127,14 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 		if rbErr := tx.Rollback(); rbErr != nil {
 			log.Printf("tx.Rollback error: %v", rbErr)
 		}
-		return err
+		return fmt.Errorf("delete student: exec delete: %w", err)
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
 			log.Printf("tx.Rollback error: %v", rbErr)
 		}
-		return err
+		return fmt.Errorf("delete student: rows affected check: %w", err)
 	}
 	if rowsAffected == 0 {
 		if rbErr := tx.Rollback(); rbErr != nil {
@@ -142,7 +142,11 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 		}
 		return ErrNotFound
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("delete student: commit tx: %w", err)
+	}
+
+	return nil
 }
 
 // ListByGrade returns all students for a specific grade.
@@ -151,7 +155,7 @@ func (r *Repository) ListByGrade(ctx context.Context, grade int32) ([]Student, e
 	var result []Student
 	err := r.db.SelectContext(ctx, &result, query, grade)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list students by grade: %w", err)
 	}
 	return result, nil
 }
