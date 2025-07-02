@@ -9,7 +9,11 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
+
+const tableName = "students"
 
 var (
 	// ErrNotFound is returned when a student record is not found in the database.
@@ -20,39 +24,34 @@ var (
 
 // Student represents a student record in the database.
 type Student struct {
-	ID        string
-	FirstName string
-	LastName  string
-	Grade     int32
-	CreatedAt time.Time
+	ID        string    `db:"id"`
+	FirstName string    `db:"first_name"`
+	LastName  string    `db:"last_name"`
+	Grade     int32     `db:"grade"`
+	CreatedAt time.Time `db:"created_at"`
 }
 
 // Repository manages operations with students in the DB.
 type Repository struct {
-	db *sql.DB
+	db *sqlx.DB
 }
 
 // NewRepository creates a new Repository with the given DB connection.
-func NewRepository(db *sql.DB) *Repository {
+func NewRepository(db *sqlx.DB) *Repository {
 	return &Repository{db: db}
 }
 
 // Create inserts a new student record into the database.
 func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return "", err
 	}
 
-	query := fmt.Sprintf(
-		`INSERT INTO students (%s) VALUES %s`,
-		ColumnsStr(),
-		Placeholders(len(Columns)),
-	)
+	query := fmt.Sprintf(`INSERT INTO %s (id, first_name, last_name, grade, created_at)
+	VALUES (:id, :first_name, :last_name, :grade, :created_at)`, tableName)
 
-	_, err = tx.ExecContext(ctx, query,
-		s.ID, s.FirstName, s.LastName, s.Grade, s.CreatedAt,
-	)
+	_, err = tx.NamedExecContext(ctx, query, &s)
 
 	if err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
@@ -69,63 +68,59 @@ func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 }
 
 // GetByID retrieves a student by their ID.
-func (r *Repository) GetByID(ctx context.Context, id string) (Student, error) {
+func (r *Repository) GetByID(ctx context.Context, id string) (*Student, error) {
 	var s Student
-	query := fmt.Sprintf(`SELECT %s FROM students WHERE id = $1`, ColumnsStr())
-	err := r.db.QueryRowContext(ctx, query, id).
-		Scan(&s.ID, &s.FirstName, &s.LastName, &s.Grade, &s.CreatedAt)
+	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at FROM %s WHERE id = $1`, tableName)
+	err := r.db.GetContext(ctx, &s, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return Student{}, ErrNotFound
+			return nil, ErrNotFound
 		}
-		return Student{}, err
+		return nil, err
 	}
-	return s, nil
+	return &s, nil
 }
 
 // Update modifies an existing student record.
 func (r *Repository) Update(ctx context.Context, s Student) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
 	}
-
-	query := `UPDATE students SET first_name = $1, last_name = $2, grade = $3 WHERE id = $4`
-
-	result, err := tx.ExecContext(ctx, query,
-		s.FirstName, s.LastName, s.Grade, s.ID,
-	)
-
-	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			log.Printf("tx.Rollback error: %v", rbErr)
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			err = tx.Commit()
 		}
+	}()
+
+	query := fmt.Sprintf(`UPDATE %s SET first_name = :first_name, last_name = :last_name, grade = :grade WHERE id = :id`, tableName)
+	result, err := tx.NamedExecContext(ctx, query, &s)
+	if err != nil {
 		return err
 	}
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			log.Printf("tx.Rollback error: %v", rbErr)
-		}
 		return err
 	}
+
 	if rowsAffected == 0 {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			log.Printf("tx.Rollback error: %v", rbErr)
-		}
 		return ErrNotFound
 	}
-	return tx.Commit()
+
+	return nil
 }
 
 // Delete removes a student record by ID.
 func (r *Repository) Delete(ctx context.Context, id string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
 	}
 
-	query := `DELETE FROM students WHERE id = $1`
+	query := fmt.Sprintf(`DELETE FROM %s WHERE id = $1`, tableName)
 
 	result, err := tx.ExecContext(ctx, query, id)
 	if err != nil {
@@ -152,25 +147,11 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 
 // ListByGrade returns all students for a specific grade.
 func (r *Repository) ListByGrade(ctx context.Context, grade int32) ([]Student, error) {
-	query := fmt.Sprintf(`SELECT %s FROM students WHERE grade = $1`, ColumnsStr())
-	rows, err := r.db.QueryContext(ctx, query, grade)
+	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at FROM %s WHERE grade = $1`, tableName)
+	var result []Student
+	err := r.db.SelectContext(ctx, &result, query, grade)
 	if err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		if err := rows.Close(); err != nil {
-			log.Printf("failed to close rows: %v", err)
-		}
-	}()
-
-	var result []Student
-	for rows.Next() {
-		var s Student
-		if err := rows.Scan(&s.ID, &s.FirstName, &s.LastName, &s.Grade, &s.CreatedAt); err != nil {
-			return nil, err
-		}
-		result = append(result, s)
-	}
-	return result, rows.Err()
+	return result, nil
 }

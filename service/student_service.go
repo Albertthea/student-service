@@ -3,7 +3,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"example.com/student-service/proto"
@@ -51,7 +50,7 @@ func (s *StudentServer) CreateStudent(ctx context.Context, req *proto.CreateStud
 func (s *StudentServer) GetStudent(ctx context.Context, req *proto.GetStudentRequest) (*proto.GetStudentResponse, error) {
 	st, err := s.repo.GetByID(ctx, req.Id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == student.ErrNotFound {
 			return nil, status.Errorf(codes.NotFound, "student with id %s not found", req.Id)
 		}
 		return nil, status.Errorf(codes.Internal, "failed to get student: %v", err)
@@ -72,7 +71,7 @@ func (s *StudentServer) GetStudent(ctx context.Context, req *proto.GetStudentReq
 func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStudentRequest) (*emptypb.Empty, error) {
 	existing, err := s.repo.GetByID(ctx, req.Student.Id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == student.ErrNotFound {
 			return nil, status.Errorf(codes.NotFound, "student not found")
 		}
 		return nil, status.Errorf(codes.Internal, "failed to fetch student: %v", err)
@@ -104,7 +103,7 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
 // DeleteStudent handles a gRPC request to delete a student by ID.
 func (s *StudentServer) DeleteStudent(ctx context.Context, req *proto.DeleteStudentRequest) (*emptypb.Empty, error) {
 	if err := s.repo.Delete(ctx, req.Id); err != nil {
-		if err == sql.ErrNoRows {
+		if err == student.ErrNotFound {
 			return nil, status.Errorf(codes.NotFound, "student not found")
 		}
 		return nil, status.Errorf(codes.Internal, "failed to delete student: %v", err)

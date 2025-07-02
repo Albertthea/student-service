@@ -2,7 +2,6 @@
 package main
 
 import (
-	"database/sql"
 	"log"
 	"net"
 
@@ -10,6 +9,7 @@ import (
 	"example.com/student-service/repository/student"
 	"example.com/student-service/service"
 
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq" // import PostgreSQL driver
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -17,7 +17,7 @@ import (
 
 func main() {
 	dsn := "host=localhost port=5434 user=student password=111111 dbname=studentdb sslmode=disable"
-	db, err := sql.Open("postgres", dsn)
+	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		log.Fatalf("failed to connect to db: %v", err)
 	}
@@ -27,10 +27,6 @@ func main() {
 			log.Printf("failed to close db: %v", err)
 		}
 	}()
-
-	if err := db.Ping(); err != nil {
-		log.Fatalf("db is unreachable: %v", err)
-	}
 
 	repo := student.NewRepository(db)
 	studentService := service.NewStudentServer(repo)
