@@ -37,7 +37,7 @@ func WithTransaction(ctx context.Context, db *sqlx.DB, run func(ctx context.Cont
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("transaction: %w", err)
+		return fmt.Errorf("begin transaction: %w", err)
 	}
 
 	ctxWithTx := contextWithTx(ctx, tx)
@@ -50,10 +50,10 @@ func WithTransaction(ctx context.Context, db *sqlx.DB, run func(ctx context.Cont
 		}
 		return fmt.Errorf("transaction: %w", err)
 	}
-	//nolint:gofmt //
+
 	err = tx.Commit()
 	if err != nil {
-		return fmt.Errorf("transaction: %w", err)
+		return fmt.Errorf("commit transaction: %w", err)
 	}
 
 	return nil
