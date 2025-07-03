@@ -4,6 +4,7 @@ package txmanager
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -36,7 +37,7 @@ func WithTransaction(ctx context.Context, db *sqlx.DB, run func(ctx context.Cont
 
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("transaction: %w", err)
 	}
 
 	ctxWithTx := contextWithTx(ctx, tx)
@@ -45,10 +46,15 @@ func WithTransaction(ctx context.Context, db *sqlx.DB, run func(ctx context.Cont
 	if err != nil {
 		rbErr := tx.Rollback()
 		if rbErr != nil {
-			return errors.Join(err, rbErr)
+			return fmt.Errorf("transaction: %w", errors.Join(err, rbErr))
 		}
-		return err
+		return fmt.Errorf("transaction: %w", err)
+	}
+	//nolint:gofmt //
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("transaction: %w", err)
 	}
 
-	return tx.Commit()
+	return nil
 }
