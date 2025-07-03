@@ -7,9 +7,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
+	"example.com/student-service/internal/txmanager"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -43,9 +43,9 @@ func NewRepository(db *sqlx.DB) *Repository {
 
 // Create inserts a new student record into the database.
 func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
+	tx, err := txmanager.GetTx(ctx)
 	if err != nil {
-		return "", fmt.Errorf("create student: begin tx: %w", err)
+		return "", fmt.Errorf("create student: tx required: %w", err)
 	}
 
 	query := fmt.Sprintf(`INSERT INTO %s (%s) VALUES %s`, tableName, ColumnsStr(), NamedPlaceholders())
@@ -53,14 +53,7 @@ func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 	_, err = tx.NamedExecContext(ctx, query, &s)
 
 	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			log.Printf("tx.Rollback error: %v", rbErr)
-		}
 		return "", fmt.Errorf("create student: insert: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return "", fmt.Errorf("create student: commit: %w", err)
 	}
 
 	return s.ID, nil
@@ -70,29 +63,32 @@ func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 func (r *Repository) GetByID(ctx context.Context, id string) (*Student, error) {
 	var s Student
 	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at FROM %s WHERE id = $1`, tableName)
-	err := r.db.GetContext(ctx, &s, query, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
+
+	if tx, err := txmanager.GetTx(ctx); err == nil {
+		if err := tx.GetContext(ctx, &s, query, id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrNotFound
+			}
+			return nil, fmt.Errorf("get student by id (tx): %w", err)
 		}
-		return nil, fmt.Errorf("get student by id: %w", err)
+	} else {
+		err = r.db.GetContext(ctx, &s, query, id)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrNotFound
+			}
+			return nil, fmt.Errorf("get student by id: %w", err)
+		}
 	}
 	return &s, nil
 }
 
 // Update modifies an existing student record.
 func (r *Repository) Update(ctx context.Context, s Student) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
+	tx, err := txmanager.GetTx(ctx)
 	if err != nil {
 		return fmt.Errorf("update student: begin tx: %w", err)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			err = tx.Commit()
-		}
-	}()
 
 	query := fmt.Sprintf(`UPDATE %s SET %s WHERE id = :id`, tableName, UpdateSetStr())
 
@@ -115,35 +111,24 @@ func (r *Repository) Update(ctx context.Context, s Student) error {
 
 // Delete removes a student record by ID.
 func (r *Repository) Delete(ctx context.Context, id string) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
+	tx, err := txmanager.GetTx(ctx)
 	if err != nil {
-		return fmt.Errorf("delete student: begin tx: %w", err)
+		return fmt.Errorf("delete student: tx required: %w", err)
 	}
 
 	query := fmt.Sprintf(`DELETE FROM %s WHERE id = $1`, tableName)
 
 	result, err := tx.ExecContext(ctx, query, id)
 	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			log.Printf("tx.Rollback error: %v", rbErr)
-		}
 		return fmt.Errorf("delete student: exec delete: %w", err)
 	}
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			log.Printf("tx.Rollback error: %v", rbErr)
-		}
 		return fmt.Errorf("delete student: rows affected check: %w", err)
 	}
 	if rowsAffected == 0 {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			log.Printf("tx.Rollback error: %v", rbErr)
-		}
 		return ErrNotFound
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("delete student: commit tx: %w", err)
 	}
 
 	return nil

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"example.com/student-service/internal/txmanager"
 	"example.com/student-service/proto"
 	"example.com/student-service/repository/student"
 	"github.com/google/uuid"
@@ -40,7 +41,11 @@ func (s *StudentServer) CreateStudent(ctx context.Context, req *proto.CreateStud
 		Grade:     req.Grade,
 		CreatedAt: now,
 	}
-	if _, err := s.repo.Create(ctx, st); err != nil {
+	err := txmanager.WithTransaction(ctx, s.repo.DB(), func(txCtx context.Context) error {
+		_, err := s.repo.Create(txCtx, st)
+		return err
+	})
+	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create student: %v", err)
 	}
 
@@ -70,31 +75,37 @@ func (s *StudentServer) GetStudent(ctx context.Context, req *proto.GetStudentReq
 
 // UpdateStudent handles a gRPC request to update an existing student's data.
 func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStudentRequest) (*emptypb.Empty, error) {
-	existing, err := s.repo.GetByID(ctx, req.Student.Id)
+	err := txmanager.WithTransaction(ctx, s.repo.DB(), func(txCtx context.Context) error {
+		existing, err := s.repo.GetByID(txCtx, req.Student.Id)
+		if err != nil {
+			if errors.Is(err, student.ErrNotFound) {
+				return status.Errorf(codes.NotFound, "student not found")
+			}
+			return status.Errorf(codes.Internal, "failed to fetch student: %v", err)
+		}
+
+		if req.Student.CreatedAt != nil && !req.Student.CreatedAt.AsTime().Equal(existing.CreatedAt) {
+			return status.Errorf(codes.InvalidArgument, "created_at field cannot be modified")
+		}
+
+		if req.Student.Grade < existing.Grade {
+			return status.Errorf(codes.FailedPrecondition, "grade cannot be decreased")
+		}
+
+		updated := student.Student{
+			ID:        req.Student.Id,
+			FirstName: req.Student.FirstName,
+			LastName:  req.Student.LastName,
+			Grade:     req.Student.Grade,
+			CreatedAt: existing.CreatedAt,
+		}
+		return s.repo.Update(txCtx, updated)
+	})
+
 	if err != nil {
 		if errors.Is(err, student.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound, "student not found")
 		}
-		return nil, status.Errorf(codes.Internal, "failed to fetch student: %v", err)
-	}
-
-	if req.Student.CreatedAt != nil && !req.Student.CreatedAt.AsTime().Equal(existing.CreatedAt) {
-		return nil, status.Errorf(codes.InvalidArgument, "created_at field cannot be modified")
-	}
-
-	if req.Student.Grade < existing.Grade {
-		return nil, status.Errorf(codes.FailedPrecondition, "grade cannot be decreased")
-	}
-
-	updated := student.Student{
-		ID:        req.Student.Id,
-		FirstName: req.Student.FirstName,
-		LastName:  req.Student.LastName,
-		Grade:     req.Student.Grade,
-		CreatedAt: existing.CreatedAt,
-	}
-
-	if err := s.repo.Update(ctx, updated); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to update student: %v", err)
 	}
 
@@ -103,7 +114,10 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
 
 // DeleteStudent handles a gRPC request to delete a student by ID.
 func (s *StudentServer) DeleteStudent(ctx context.Context, req *proto.DeleteStudentRequest) (*emptypb.Empty, error) {
-	if err := s.repo.Delete(ctx, req.Id); err != nil {
+	err := txmanager.WithTransaction(ctx, s.repo.DB(), func(txCtx context.Context) error {
+		return s.repo.Delete(txCtx, req.Id)
+	})
+	if err != nil {
 		if errors.Is(err, student.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound, "student not found")
 		}
