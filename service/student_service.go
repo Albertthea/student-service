@@ -4,6 +4,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"example.com/student-service/internal/txmanager"
