@@ -79,17 +79,17 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
 		existing, err := s.repo.GetByID(txCtx, req.Student.Id)
 		if err != nil {
 			if errors.Is(err, student.ErrNotFound) {
-				return status.Errorf(codes.NotFound, "student not found")
+				return fmt.Errorf("student not found")
 			}
-			return status.Errorf(codes.Internal, "failed to fetch student: %v", err)
+			return fmt.Errorf("failed to fetch student: %v", err)
 		}
 
 		if req.Student.CreatedAt != nil && !req.Student.CreatedAt.AsTime().Equal(existing.CreatedAt) {
-			return status.Errorf(codes.InvalidArgument, "created_at field cannot be modified")
+			return fmt.Errorf("created_at field cannot be modified")
 		}
 
 		if req.Student.Grade < existing.Grade {
-			return status.Errorf(codes.FailedPrecondition, "grade cannot be decreased")
+			return fmt.Errorf("grade cannot be decreased")
 		}
 
 		updated := student.Student{
@@ -99,15 +99,22 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
 			Grade:     req.Student.Grade,
 			CreatedAt: existing.CreatedAt,
 		}
+
 		return s.repo.Update(txCtx, updated)
 	})
 
 	if err != nil {
-		if errors.Is(err, student.ErrNotFound) {
-			return nil, status.Errorf(codes.NotFound, "student not found")
-		}
-		return nil, status.Errorf(codes.Internal, "failed to update student: %v", err)
-	}
+        switch err.Error() {
+        case "student not found":
+            return nil, status.Errorf(codes.NotFound, err.Error())
+        case "created_at field cannot be modified":
+            return nil, status.Errorf(codes.InvalidArgument, err.Error())
+        case "grade cannot be decreased":
+            return nil, status.Errorf(codes.FailedPrecondition, err.Error())
+        default:
+            return nil, status.Errorf(codes.Internal, "failed to update student: %v", err)
+        }
+    }
 
 	return &emptypb.Empty{}, nil
 }
