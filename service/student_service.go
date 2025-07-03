@@ -105,17 +105,17 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
 	})
 
 	if err != nil {
-        switch err.Error() {
-        case "student not found":
-            return nil, status.Errorf(codes.NotFound, err.Error())
-        case "created_at field cannot be modified":
-            return nil, status.Errorf(codes.InvalidArgument, err.Error())
-        case "grade cannot be decreased":
-            return nil, status.Errorf(codes.FailedPrecondition, err.Error())
-        default:
-            return nil, status.Errorf(codes.Internal, "failed to update student: %v", err)
-        }
-    }
+		switch err.Error() {
+		case "student not found":
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		case "created_at field cannot be modified":
+			return nil, status.Errorf(codes.InvalidArgument, err.Error())
+		case "grade cannot be decreased":
+			return nil, status.Errorf(codes.FailedPrecondition, err.Error())
+		default:
+			return nil, status.Errorf(codes.Internal, "failed to update student: %v", err)
+		}
+	}
 
 	return &emptypb.Empty{}, nil
 }

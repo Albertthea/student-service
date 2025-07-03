@@ -38,7 +38,7 @@ type Repository struct {
 
 // DB returns the underlying sqlx.DB instance.
 func (r *Repository) DB() *sqlx.DB {
-    return r.db
+	return r.db
 }
 
 // NewRepository creates a new Repository with the given DB connection.
