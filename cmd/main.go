@@ -18,8 +18,11 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+// ConfigPath defines the path to the YAML configuration file.
+const ConfigPath = "config.yaml"
+
 func main() {
-	cfg, err := config.LoadConfig("config.yaml")
+	cfg, err := config.LoadConfig(ConfigPath)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
