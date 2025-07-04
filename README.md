@@ -59,6 +59,30 @@ psql -h localhost -U student -d studentdb -f repository/migrations/00000_initial
 ```
 Password: 111111
 
+## Environment Variables for DB Credentials
+
+The application expects the database login and password to be provided via environment variables.
+
+The names of these variables are configured in `config.yaml` under the PostgreSQL authorization environment section:
+
+```yaml
+postgresql:
+  authorisation:
+    env:
+      login: DB_USER
+      password: DB_PASS
+```
+
+Set these environment variables before running the server:
+
+```bash
+export DB_USER=student
+export DB_PASS=111111
+```
+
+Make sure these variables match what you specify in your config.yaml.
+This allows the application to securely load the DB credentials without hardcoding them in the code or config files.
+
 ## Testing with grpcurl
 
 Make sure grpcurl is installed.
