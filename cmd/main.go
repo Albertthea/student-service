@@ -2,9 +2,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 
+	"example.com/student-service/internal/config"
 	"example.com/student-service/proto"
 	"example.com/student-service/repository/student"
 	"example.com/student-service/service"
@@ -16,7 +18,18 @@ import (
 )
 
 func main() {
-	dsn := "host=localhost port=5434 user=student password=111111 dbname=studentdb sslmode=disable"
+	cfg, err := config.LoadConfig("config.yaml")
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
+
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=studentdb sslmode=disable",
+		cfg.PostgreSQL.Host,
+		cfg.PostgreSQL.Port,
+		cfg.DBLogin,
+		cfg.DBPassword,
+	)
+
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		log.Fatalf("failed to connect to db: %v", err)
@@ -31,16 +44,17 @@ func main() {
 	repo := student.NewRepository(db)
 	studentService := service.NewStudentServer(repo)
 
-	lis, err := net.Listen("tcp", ":50051")
+	listenAddress := fmt.Sprintf(":%d", cfg.Server.Port)
+	lis, err := net.Listen("tcp", listenAddress)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("failed to listen on %s: %v", listenAddress, err)
 	}
 
 	grpcServer := grpc.NewServer()
 	proto.RegisterStudentServiceServer(grpcServer, studentService)
 	reflection.Register(grpcServer)
 
-	log.Println("gRPC server started on :50051")
+	log.Printf("gRPC server started on %s", listenAddress)
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

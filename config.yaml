@@ -1,0 +1,10 @@
+server:
+  port: 50051
+
+postgresql:
+  host: localhost
+  port: 5434
+  authorisation:
+    env:
+      login: POSTGRESQL_LOGIN
+      password: POSTGRESQL_PASSWORD
