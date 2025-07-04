@@ -4,7 +4,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -26,9 +25,6 @@ type Config struct {
 			} `yaml:"env"`
 		} `yaml:"authorisation"`
 	} `yaml:"postgresql"`
-
-	DBLogin    string
-	DBPassword string
 }
 
 // LoadConfig loads configuration from the specified YAML file
@@ -43,17 +39,5 @@ func LoadConfig(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-
-	cfg.DBLogin = os.Getenv(cfg.PostgreSQL.Authorisation.Env.LoginEnv)
-	cfg.DBPassword = os.Getenv(cfg.PostgreSQL.Authorisation.Env.PasswordEnv)
-
-	if cfg.DBLogin == "" || cfg.DBPassword == "" {
-		log.Println("Warning: DB credentials are missing")
-		return nil, fmt.Errorf("database credentials not found in env variables: %s, %s",
-			cfg.PostgreSQL.Authorisation.Env.LoginEnv,
-			cfg.PostgreSQL.Authorisation.Env.PasswordEnv,
-		)
-	}
-
 	return &cfg, nil
 }

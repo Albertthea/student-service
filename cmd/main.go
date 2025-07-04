@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 
 	"example.com/student-service/internal/config"
 	"example.com/student-service/proto"
@@ -23,11 +24,20 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	dbLogin := os.Getenv(cfg.PostgreSQL.Authorisation.Env.LoginEnv)
+	dbPassword := os.Getenv(cfg.PostgreSQL.Authorisation.Env.PasswordEnv)
+
+	if dbLogin == "" || dbPassword == "" {
+		log.Fatalf("missing DB credentials in env variables: %s, %s",
+			cfg.PostgreSQL.Authorisation.Env.LoginEnv,
+			cfg.PostgreSQL.Authorisation.Env.PasswordEnv)
+	}
+
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=studentdb sslmode=disable",
 		cfg.PostgreSQL.Host,
 		cfg.PostgreSQL.Port,
-		cfg.DBLogin,
-		cfg.DBPassword,
+		dbLogin,
+		dbPassword,
 	)
 
 	db, err := sqlx.Connect("postgres", dsn)
