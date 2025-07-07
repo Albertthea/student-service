@@ -14,6 +14,7 @@ import (
 	"example.com/student-service/proto"
 	"example.com/student-service/repository/student"
 	"example.com/student-service/service"
+	"github.com/google/uuid"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq" // import PostgreSQL driver
@@ -28,6 +29,12 @@ type realTimeProvider struct{}
 
 func (realTimeProvider) Now() time.Time {
 	return time.Now()
+}
+
+type realIDGenerator struct{}
+
+func (realIDGenerator) GenerateID() string {
+	return uuid.New().String()
 }
 
 func main() {
@@ -66,7 +73,8 @@ func main() {
 	repo := student.NewRepository(db)
 	txManager := txmanager.NewManager(db)
 	timeProvider := realTimeProvider{}
-	studentService := service.NewStudentServer(repo, timeProvider, txManager)
+	idGen := realIDGenerator{}
+	studentService := service.NewStudentServer(repo, timeProvider, txManager, idGen)
 
 	listenAddress := fmt.Sprintf(":%d", cfg.Server.Port)
 	lis, err := net.Listen("tcp", listenAddress)

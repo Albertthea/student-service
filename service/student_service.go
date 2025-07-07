@@ -8,7 +8,6 @@ import (
 
 	"example.com/student-service/proto"
 	"example.com/student-service/repository/student"
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -21,20 +20,22 @@ type StudentServer struct {
 	repo         Repository
 	timeProvider TimeProvider
 	txManager    TxManager
+	idGenerator  IDGenerator
 }
 
 // NewStudentServer creates a new instance of StudentServer.
-func NewStudentServer(repo Repository, timeProvider TimeProvider, txManager TxManager) *StudentServer {
+func NewStudentServer(repo Repository, timeProvider TimeProvider, txManager TxManager, idGen IDGenerator) *StudentServer {
 	return &StudentServer{
 		repo:         repo,
 		timeProvider: timeProvider,
 		txManager:    txManager,
+		idGenerator:  idGen,
 	}
 }
 
 // CreateStudent handles a gRPC request to create a new student.
 func (s *StudentServer) CreateStudent(ctx context.Context, req *proto.CreateStudentRequest) (*proto.CreateStudentResponse, error) {
-	id := uuid.New().String()
+	id := s.idGenerator.GenerateID()
 	now := s.timeProvider.Now()
 
 	st := student.Student{

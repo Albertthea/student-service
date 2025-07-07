@@ -26,3 +26,8 @@ type TimeProvider interface {
 type TxManager interface {
 	WithTransaction(ctx context.Context, fn func(context.Context) error) error
 }
+
+// IDGenerator generates unique IDs for new entities.
+type IDGenerator interface {
+	GenerateID() string
+}
