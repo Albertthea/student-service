@@ -6,6 +6,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
+
+	"example.com/student-service/internal/txmanager"
 
 	"example.com/student-service/internal/config"
 	"example.com/student-service/proto"
@@ -20,6 +23,12 @@ import (
 
 // ConfigPath defines the path to the YAML configuration file.
 const ConfigPath = "config.yaml"
+
+type realTimeProvider struct{}
+
+func (realTimeProvider) Now() time.Time {
+	return time.Now()
+}
 
 func main() {
 	cfg, err := config.LoadConfig(ConfigPath)
@@ -55,7 +64,9 @@ func main() {
 	}()
 
 	repo := student.NewRepository(db)
-	studentService := service.NewStudentServer(repo)
+	txManager := txmanager.NewManager(db)
+	timeProvider := realTimeProvider{}
+	studentService := service.NewStudentServer(repo, timeProvider, txManager)
 
 	listenAddress := fmt.Sprintf(":%d", cfg.Server.Port)
 	lis, err := net.Listen("tcp", listenAddress)
