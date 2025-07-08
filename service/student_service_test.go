@@ -380,3 +380,92 @@ func TestStudentServer_DeleteStudent_DBError(t *testing.T) {
 		t.Fatalf("gRPC Internal error expected, but received: %v", err)
 	}
 }
+
+func TestStudentServer_ListStudents_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockRepository(ctrl)
+	mockTime := mocks.NewMockTimeProvider(ctrl)
+	mockTx := mocks.NewMockTxManager(ctrl)
+
+	idGen := fixedIDGenerator{}
+	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
+
+	grade := int32(10)
+	students := []student.Student{
+		{ID: "1", FirstName: "John", LastName: "Doe", Grade: 10},
+		{ID: "2", FirstName: "Alice", LastName: "Smith", Grade: 10},
+	}
+
+	mockRepo.EXPECT().
+		ListByGrade(gomock.Any(), grade).
+		Return(students, nil)
+
+	resp, err := server.ListStudents(context.Background(), &proto.ListStudentsRequest{Grade: grade})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(resp.Students) != len(students) {
+		t.Errorf("expected %d students, got %d", len(students), len(resp.Students))
+	}
+}
+
+func TestStudentServer_ListStudents_EmptyList(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockRepository(ctrl)
+	mockTime := mocks.NewMockTimeProvider(ctrl)
+	mockTx := mocks.NewMockTxManager(ctrl)
+
+	idGen := fixedIDGenerator{}
+	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
+
+	grade := int32(10)
+
+	mockRepo.EXPECT().
+		ListByGrade(gomock.Any(), grade).
+		Return([]student.Student{}, nil)
+
+	resp, err := server.ListStudents(context.Background(), &proto.ListStudentsRequest{Grade: grade})
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(resp.Students) != 0 {
+		t.Errorf("expected empty list, got %d students", len(resp.Students))
+	}
+}
+
+func TestStudentServer_ListStudents_DBError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockRepository(ctrl)
+	mockTime := mocks.NewMockTimeProvider(ctrl)
+	mockTx := mocks.NewMockTxManager(ctrl)
+
+	idGen := fixedIDGenerator{}
+	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
+
+	grade := int32(10)
+	dbErr := errors.New("db error")
+
+	mockRepo.EXPECT().
+		ListByGrade(gomock.Any(), grade).
+		Return(nil, dbErr)
+
+	_, err := server.ListStudents(context.Background(), &proto.ListStudentsRequest{Grade: grade})
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Internal {
+		t.Fatalf("expected Internal error, got %v", err)
+	}
+}
