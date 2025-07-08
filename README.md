@@ -162,21 +162,21 @@ gRPC codegen plugins
   protoc-gen-go-grpc v1.3.0+
 
 ## Mocks Generation
-We use mockery to generate mocks for interfaces used in unit tests.
+Mocks are generated using GoMock via the mockgen tool.
 
-Install mockery:
-
-```bash
-go install github.com/vektra/mockery/v2@latest
-```
-
-Generate mocks:
+To install mockgen:
 
 ```bash
-mockery --all --keeptree
+go install go.uber.org/mock/mockgen@latest
 ```
 
-This command generates mocks for all exported interfaces, preserving the original folder structure.
+To regenerate mocks for service interfaces:
+
+```bash
+mockgen -source=service/interface.go -destination=service/mocks/mocks.go -package=mocks
+```
+
+This command generates mocks for the interfaces defined in service/interface.go and writes them to service/mocks/mocks.go.
 
 ## Running Tests
 To run all unit tests:
