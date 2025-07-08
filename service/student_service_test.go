@@ -22,18 +22,34 @@ func (f fixedIDGenerator) GenerateID() string {
 	return "generated-id"
 }
 
-func TestStudentServer_CreateStudent_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func setupTest(t *testing.T) (
+	ctrl *gomock.Controller,
+	mockRepo *mocks.MockRepository,
+	mockTime *mocks.MockTimeProvider,
+	mockTx *mocks.MockTxManager,
+	server *service.StudentServer,
+) {
+	t.Helper()
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
+	ctrl = gomock.NewController(t)
+
+	mockRepo = mocks.NewMockRepository(ctrl)
+	mockTime = mocks.NewMockTimeProvider(ctrl)
+	mockTx = mocks.NewMockTxManager(ctrl)
+
+	idGen := fixedIDGenerator{}
+	server = service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
+
+	return ctrl, mockRepo, mockTime, mockTx, server
+}
+
+func TestStudentServer_CreateStudent_Success(t *testing.T) {
+	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
+	defer ctrl.Finish()
 
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
 
-	// Expect WithTransaction to invoke the provided function
 	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
@@ -41,9 +57,6 @@ func TestStudentServer_CreateStudent_Success(t *testing.T) {
 	)
 
 	mockRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return("generated-id", nil)
-
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	req := &proto.CreateStudentRequest{
 		FirstName: "John",
@@ -62,12 +75,8 @@ func TestStudentServer_CreateStudent_Success(t *testing.T) {
 }
 
 func TestStudentServer_CreateStudent_DBError(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
 	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
 
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
@@ -79,9 +88,6 @@ func TestStudentServer_CreateStudent_DBError(t *testing.T) {
 	)
 
 	mockRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return("", errors.New("db error"))
-
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	req := &proto.CreateStudentRequest{
 		FirstName: "Fail",
@@ -102,15 +108,8 @@ func TestStudentServer_CreateStudent_DBError(t *testing.T) {
 }
 
 func TestStudentServer_GetStudent_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, _, _, server := setupTest(t)
 	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
-
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	expectedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 	studentID := "some-id"
@@ -150,15 +149,8 @@ func TestStudentServer_GetStudent_Success(t *testing.T) {
 }
 
 func TestStudentServer_GetStudent_NotFound(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, _, _, server := setupTest(t)
 	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
-
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	studentID := "non-existent-id"
 
@@ -179,16 +171,10 @@ func TestStudentServer_GetStudent_NotFound(t *testing.T) {
 }
 
 func TestStudentServer_GetStudent_DBError(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, mockTime, _, server := setupTest(t)
 	defer ctrl.Finish()
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
-
 	studentID := "some-id"
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
@@ -210,12 +196,8 @@ func TestStudentServer_GetStudent_DBError(t *testing.T) {
 }
 
 func TestStudentServer_UpdateStudent_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
 	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
 
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
@@ -238,9 +220,6 @@ func TestStudentServer_UpdateStudent_Success(t *testing.T) {
 
 	mockRepo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil)
 
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
-
 	req := &proto.UpdateStudentRequest{
 		Student: &proto.Student{
 			Id:        "some-id",
@@ -258,12 +237,8 @@ func TestStudentServer_UpdateStudent_Success(t *testing.T) {
 }
 
 func TestStudentServer_UpdateStudent_DBError(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
 	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
 
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
@@ -285,9 +260,6 @@ func TestStudentServer_UpdateStudent_DBError(t *testing.T) {
 		}, nil)
 
 	mockRepo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(errors.New("db error"))
-
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	req := &proto.UpdateStudentRequest{
 		Student: &proto.Student{
@@ -311,17 +283,13 @@ func TestStudentServer_UpdateStudent_DBError(t *testing.T) {
 }
 
 func TestStudentServer_DeleteStudent_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
 	defer ctrl.Finish()
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
-
-	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-
 	studentID := "some-id"
+	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
+
+	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
 
 	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, fn func(context.Context) error) error {
@@ -333,9 +301,6 @@ func TestStudentServer_DeleteStudent_Success(t *testing.T) {
 		Delete(gomock.Any(), studentID).
 		Return(nil)
 
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
-
 	_, err := server.DeleteStudent(context.Background(), &proto.DeleteStudentRequest{Id: studentID})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -343,17 +308,12 @@ func TestStudentServer_DeleteStudent_Success(t *testing.T) {
 }
 
 func TestStudentServer_DeleteStudent_DBError(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
 	defer ctrl.Finish()
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
-
+	studentID := "some-id"
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-
-	studentID := "some-id"
 
 	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, fn func(context.Context) error) error {
@@ -364,10 +324,6 @@ func TestStudentServer_DeleteStudent_DBError(t *testing.T) {
 	mockRepo.EXPECT().
 		Delete(gomock.Any(), studentID).
 		Return(errors.New("db error"))
-
-	idGen := fixedIDGenerator{}
-
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	_, err := server.DeleteStudent(context.Background(), &proto.DeleteStudentRequest{Id: studentID})
 
@@ -382,15 +338,8 @@ func TestStudentServer_DeleteStudent_DBError(t *testing.T) {
 }
 
 func TestStudentServer_ListStudents_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, _, _, server := setupTest(t)
 	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
-
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	grade := int32(10)
 	students := []student.Student{
@@ -413,15 +362,8 @@ func TestStudentServer_ListStudents_Success(t *testing.T) {
 }
 
 func TestStudentServer_ListStudents_EmptyList(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, _, _, server := setupTest(t)
 	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
-
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	grade := int32(10)
 
@@ -441,15 +383,8 @@ func TestStudentServer_ListStudents_EmptyList(t *testing.T) {
 }
 
 func TestStudentServer_ListStudents_DBError(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	ctrl, mockRepo, _, _, server := setupTest(t)
 	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	mockTime := mocks.NewMockTimeProvider(ctrl)
-	mockTx := mocks.NewMockTxManager(ctrl)
-
-	idGen := fixedIDGenerator{}
-	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
 
 	grade := int32(10)
 	dbErr := errors.New("db error")
