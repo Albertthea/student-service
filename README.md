@@ -160,3 +160,32 @@ Protocol Buffers compiler (protoc) >= 3.21.0
 gRPC codegen plugins
   protoc-gen-go v1.30.0+
   protoc-gen-go-grpc v1.3.0+
+
+## Mocks Generation
+We use mockery to generate mocks for interfaces used in unit tests.
+
+Install mockery:
+
+```bash
+go install github.com/vektra/mockery/v2@latest
+```
+
+Generate mocks:
+
+```bash
+mockery --all --keeptree
+```
+
+This command generates mocks for all exported interfaces, preserving the original folder structure.
+
+## Running Tests
+To run all unit tests:
+
+```bash
+go test ./...
+```
+For verbose output:
+
+```bash
+go test -v ./...
+```
