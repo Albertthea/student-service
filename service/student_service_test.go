@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -21,7 +22,7 @@ func (f fixedIDGenerator) GenerateID() string {
 	return "generated-id"
 }
 
-func TestStudentServer_CreateStudent(t *testing.T) {
+func TestStudentServer_CreateStudent_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -57,6 +58,46 @@ func TestStudentServer_CreateStudent(t *testing.T) {
 
 	if resp.Id != "generated-id" {
 		t.Errorf("expected id 'generated-id', got %s", resp.Id)
+	}
+}
+
+func TestStudentServer_CreateStudent_DBError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockRepository(ctrl)
+	mockTime := mocks.NewMockTimeProvider(ctrl)
+	mockTx := mocks.NewMockTxManager(ctrl)
+
+	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
+	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
+
+	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(ctx)
+		},
+	)
+
+	mockRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return("", errors.New("db error"))
+
+	idGen := fixedIDGenerator{}
+	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
+
+	req := &proto.CreateStudentRequest{
+		FirstName: "Fail",
+		LastName:  "Case",
+		Grade:     10,
+	}
+
+	_, err := server.CreateStudent(context.Background(), req)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Internal {
+		t.Fatalf("gRPC Internal error expected, but received: %v", err)
 	}
 }
 
@@ -134,5 +175,42 @@ func TestStudentServer_GetStudent_NotFound(t *testing.T) {
 	st, ok := status.FromError(err)
 	if !ok || st.Code() != codes.NotFound {
 		t.Fatalf("expected NotFound error, got %v", err)
+	}
+}
+
+func TestStudentServer_GetStudent_DBError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mocks.NewMockRepository(ctrl)
+	mockTime := mocks.NewMockTimeProvider(ctrl)
+	mockTx := mocks.NewMockTxManager(ctrl)
+
+	studentID := "some-id"
+	idGen := fixedIDGenerator{}
+	server := service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
+
+	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
+	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
+
+	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(ctx)
+		},
+	)
+
+	mockRepo.EXPECT().
+		GetByID(gomock.Any(), studentID).
+		Return(nil, errors.New("db error"))
+
+	_, err := server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Internal {
+		t.Fatalf("gRPC Internal error expected, but received: %v", err)
 	}
 }
