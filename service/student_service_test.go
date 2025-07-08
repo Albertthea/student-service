@@ -14,6 +14,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/golang/mock/gomock"
+	_ "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
 type fixedIDGenerator struct{}
@@ -22,193 +25,144 @@ func (f fixedIDGenerator) GenerateID() string {
 	return "generated-id"
 }
 
-func setupTest(t *testing.T) (
-	ctrl *gomock.Controller,
-	mockRepo *mocks.MockRepository,
-	mockTime *mocks.MockTimeProvider,
-	mockTx *mocks.MockTxManager,
-	server *service.StudentServer,
-) {
-	t.Helper()
+// StudentServiceTestSuite defines the test suite structure
+type StudentServiceTestSuite struct {
+	suite.Suite
 
-	ctrl = gomock.NewController(t)
+	ctrl     *gomock.Controller
+	mockRepo *mocks.MockRepository
+	mockTime *mocks.MockTimeProvider
+	mockTx   *mocks.MockTxManager
+	server   *service.StudentServer
+}
 
-	mockRepo = mocks.NewMockRepository(ctrl)
-	mockTime = mocks.NewMockTimeProvider(ctrl)
-	mockTx = mocks.NewMockTxManager(ctrl)
+func (s *StudentServiceTestSuite) SetupTest() {
+	s.ctrl = gomock.NewController(s.T())
+
+	s.mockRepo = mocks.NewMockRepository(s.ctrl)
+	s.mockTime = mocks.NewMockTimeProvider(s.ctrl)
+	s.mockTx = mocks.NewMockTxManager(s.ctrl)
 
 	idGen := fixedIDGenerator{}
-	server = service.NewStudentServer(mockRepo, mockTime, mockTx, idGen)
-
-	return ctrl, mockRepo, mockTime, mockTx, server
+	s.server = service.NewStudentServer(s.mockRepo, s.mockTime, s.mockTx, idGen)
 }
 
-func TestStudentServer_CreateStudent_Success(t *testing.T) {
-	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
-	defer ctrl.Finish()
+func (s *StudentServiceTestSuite) TestSuiteRuns() {
+	s.T().Log("Test suite is running")
+	s.True(true)
+}
 
-	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
+func (s *StudentServiceTestSuite) TearDownTest() {
+	s.ctrl.Finish()
+}
 
-	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
+func (s *StudentServiceTestSuite) TestCreateStudent_Success() {
+	ctx := context.Background()
+
+	req := &proto.CreateStudentRequest{
+		FirstName: "Ivan",
+		LastName:  "Petrov",
+		Grade:     9,
+	}
+
+	s.mockTime.EXPECT().Now().Return(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
 		},
 	)
+	s.mockRepo.EXPECT().Create(ctx, gomock.Any()).Return("generated-id", nil)
 
-	mockRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return("generated-id", nil)
+	resp, err := s.server.CreateStudent(ctx, req)
 
-	req := &proto.CreateStudentRequest{
-		FirstName: "John",
-		LastName:  "Doe",
-		Grade:     10,
-	}
-
-	resp, err := server.CreateStudent(context.Background(), req)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if resp.Id != "generated-id" {
-		t.Errorf("expected id 'generated-id', got %s", resp.Id)
-	}
+	require.NoError(s.T(), err)
+	s.Equal("generated-id", resp.GetId())
 }
 
-func TestStudentServer_CreateStudent_DBError(t *testing.T) {
-	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
-	defer ctrl.Finish()
+func (s *StudentServiceTestSuite) TestCreateStudent_DBError() {
+	ctx := context.Background()
+	req := &proto.CreateStudentRequest{FirstName: "Fail", LastName: "Case", Grade: 10}
 
-	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
+	s.mockTime.EXPECT().Now().Return(time.Now()).AnyTimes()
+	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, fn func(context.Context) error) error {
+		return fn(ctx)
+	})
+	s.mockRepo.EXPECT().Create(ctx, gomock.Any()).Return("", errors.New("db error"))
 
-	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	)
-
-	mockRepo.EXPECT().Create(gomock.Any(), gomock.Any()).Return("", errors.New("db error"))
-
-	req := &proto.CreateStudentRequest{
-		FirstName: "Fail",
-		LastName:  "Case",
-		Grade:     10,
-	}
-
-	_, err := server.CreateStudent(context.Background(), req)
-
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
-
+	_, err := s.server.CreateStudent(ctx, req)
+	s.Error(err)
 	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.Internal {
-		t.Fatalf("gRPC Internal error expected, but received: %v", err)
-	}
+	require.True(s.T(), ok)
+	s.Equal(codes.Internal, st.Code())
 }
 
-func TestStudentServer_GetStudent_Success(t *testing.T) {
-	ctrl, mockRepo, _, _, server := setupTest(t)
-	defer ctrl.Finish()
+func (s *StudentServiceTestSuite) TestGetStudent_Success() {
+	id := "student-id"
+	expectedTime := time.Now()
 
-	expectedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	studentID := "some-id"
-
-	mockRepo.EXPECT().GetByID(gomock.Any(), studentID).Return(&student.Student{
-		ID:        studentID,
+	s.mockRepo.EXPECT().GetByID(gomock.Any(), id).Return(&student.Student{
+		ID:        id,
 		FirstName: "Alice",
 		LastName:  "Smith",
 		Grade:     9,
 		CreatedAt: expectedTime,
 	}, nil)
 
-	resp, err := server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if resp.Student == nil {
-		t.Fatal("expected student, got nil")
-	}
-
-	if resp.Student.Id != studentID {
-		t.Errorf("expected id %s, got %s", studentID, resp.Student.Id)
-	}
-	if resp.Student.FirstName != "Alice" {
-		t.Errorf("expected first name Alice, got %s", resp.Student.FirstName)
-	}
-	if resp.Student.LastName != "Smith" {
-		t.Errorf("expected last name Smith, got %s", resp.Student.LastName)
-	}
-	if resp.Student.Grade != 9 {
-		t.Errorf("expected grade 9, got %d", resp.Student.Grade)
-	}
-	if !resp.Student.CreatedAt.AsTime().Equal(expectedTime) {
-		t.Errorf("expected CreatedAt %v, got %v", expectedTime, resp.Student.CreatedAt.AsTime())
-	}
+	resp, err := s.server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: id})
+	require.NoError(s.T(), err)
+	s.Equal(id, resp.Student.Id)
+	s.Equal("Alice", resp.Student.FirstName)
+	s.Equal("Smith", resp.Student.LastName)
+	s.Equal(int32(9), resp.Student.Grade)
+	s.WithinDuration(expectedTime, resp.Student.CreatedAt.AsTime(), time.Second)
 }
 
-func TestStudentServer_GetStudent_NotFound(t *testing.T) {
-	ctrl, mockRepo, _, _, server := setupTest(t)
-	defer ctrl.Finish()
-
+func (s *StudentServiceTestSuite) TestGetStudent_NotFound() {
 	studentID := "non-existent-id"
 
-	mockRepo.EXPECT().
+	s.mockRepo.EXPECT().
 		GetByID(gomock.Any(), studentID).
 		Return(nil, student.ErrNotFound)
 
-	_, err := server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
+	_, err := s.server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
 
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
+	s.Error(err)
 
 	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.NotFound {
-		t.Fatalf("expected NotFound error, got %v", err)
-	}
+	require.True(s.T(), ok)
+	s.Equal(codes.NotFound, st.Code())
 }
 
-func TestStudentServer_GetStudent_DBError(t *testing.T) {
-	ctrl, mockRepo, mockTime, _, server := setupTest(t)
-	defer ctrl.Finish()
-
+func (s *StudentServiceTestSuite) TestGetStudent_DBError() {
 	studentID := "some-id"
 
-	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-
-	mockRepo.EXPECT().
+	s.mockTime.EXPECT().Now().Return(time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)).AnyTimes()
+	s.mockRepo.EXPECT().
 		GetByID(gomock.Any(), studentID).
 		Return(nil, errors.New("db error"))
 
-	_, err := server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
+	_, err := s.server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
 
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
+	s.Error(err)
 
 	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.Internal {
-		t.Fatalf("gRPC Internal error expected, but received: %v", err)
-	}
+	require.True(s.T(), ok)
+	s.Equal(codes.Internal, st.Code())
 }
 
-func TestStudentServer_UpdateStudent_Success(t *testing.T) {
-	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
-	defer ctrl.Finish()
+func (s *StudentServiceTestSuite) TestUpdateStudent_Success() {
+	ctx := context.Background()
 
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
+	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
 
-	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
+	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
 		},
 	)
 
-	mockRepo.EXPECT().
+	s.mockRepo.EXPECT().
 		GetByID(gomock.Any(), "some-id").
 		Return(&student.Student{
 			ID:        "some-id",
@@ -218,7 +172,7 @@ func TestStudentServer_UpdateStudent_Success(t *testing.T) {
 			CreatedAt: fixedTime,
 		}, nil)
 
-	mockRepo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil)
+	s.mockRepo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil)
 
 	req := &proto.UpdateStudentRequest{
 		Student: &proto.Student{
@@ -229,27 +183,23 @@ func TestStudentServer_UpdateStudent_Success(t *testing.T) {
 		},
 	}
 
-	_, err := server.UpdateStudent(context.Background(), req)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
+	_, err := s.server.UpdateStudent(ctx, req)
+	require.NoError(s.T(), err)
 }
 
-func TestStudentServer_UpdateStudent_DBError(t *testing.T) {
-	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
-	defer ctrl.Finish()
+func (s *StudentServiceTestSuite) TestUpdateStudent_DBError() {
+	ctx := context.Background()
 
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
+	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
 
-	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
+	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
 		},
 	)
 
-	mockRepo.EXPECT().
+	s.mockRepo.EXPECT().
 		GetByID(gomock.Any(), "some-id").
 		Return(&student.Student{
 			ID:        "some-id",
@@ -259,7 +209,7 @@ func TestStudentServer_UpdateStudent_DBError(t *testing.T) {
 			CreatedAt: fixedTime,
 		}, nil)
 
-	mockRepo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(errors.New("db error"))
+	s.mockRepo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(errors.New("db error"))
 
 	req := &proto.UpdateStudentRequest{
 		Student: &proto.Student{
@@ -270,137 +220,93 @@ func TestStudentServer_UpdateStudent_DBError(t *testing.T) {
 		},
 	}
 
-	_, err := server.UpdateStudent(context.Background(), req)
+	_, err := s.server.UpdateStudent(ctx, req)
 
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
+	s.Error(err)
 
 	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.Internal {
-		t.Fatalf("gRPC Internal error expected, but received: %v", err)
-	}
+	require.True(s.T(), ok)
+	s.Equal(codes.Internal, st.Code())
 }
 
-func TestStudentServer_DeleteStudent_Success(t *testing.T) {
-	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
-	defer ctrl.Finish()
-
+func (s *StudentServiceTestSuite) TestDeleteStudent_Success() {
+	ctx := context.Background()
 	studentID := "some-id"
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 
-	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-
-	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
+	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
+	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
 		},
 	)
+	s.mockRepo.EXPECT().Delete(gomock.Any(), studentID).Return(nil)
 
-	mockRepo.EXPECT().
-		Delete(gomock.Any(), studentID).
-		Return(nil)
-
-	_, err := server.DeleteStudent(context.Background(), &proto.DeleteStudentRequest{Id: studentID})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	_, err := s.server.DeleteStudent(ctx, &proto.DeleteStudentRequest{Id: studentID})
+	require.NoError(s.T(), err)
 }
 
-func TestStudentServer_DeleteStudent_DBError(t *testing.T) {
-	ctrl, mockRepo, mockTime, mockTx, server := setupTest(t)
-	defer ctrl.Finish()
-
+func (s *StudentServiceTestSuite) TestDeleteStudent_DBError() {
+	ctx := context.Background()
 	studentID := "some-id"
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
 
-	mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
+	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
+	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
 		},
 	)
+	s.mockRepo.EXPECT().Delete(gomock.Any(), studentID).Return(errors.New("db error"))
 
-	mockRepo.EXPECT().
-		Delete(gomock.Any(), studentID).
-		Return(errors.New("db error"))
-
-	_, err := server.DeleteStudent(context.Background(), &proto.DeleteStudentRequest{Id: studentID})
-
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
+	_, err := s.server.DeleteStudent(ctx, &proto.DeleteStudentRequest{Id: studentID})
+	s.Error(err)
 
 	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.Internal {
-		t.Fatalf("gRPC Internal error expected, but received: %v", err)
-	}
+	require.True(s.T(), ok)
+	s.Equal(codes.Internal, st.Code())
 }
 
-func TestStudentServer_ListStudents_Success(t *testing.T) {
-	ctrl, mockRepo, _, _, server := setupTest(t)
-	defer ctrl.Finish()
-
+func (s *StudentServiceTestSuite) TestListStudents_Success() {
+	ctx := context.Background()
 	grade := int32(10)
 	students := []student.Student{
 		{ID: "1", FirstName: "John", LastName: "Doe", Grade: 10},
 		{ID: "2", FirstName: "Alice", LastName: "Smith", Grade: 10},
 	}
 
-	mockRepo.EXPECT().
-		ListByGrade(gomock.Any(), grade).
-		Return(students, nil)
+	s.mockRepo.EXPECT().ListByGrade(gomock.Any(), grade).Return(students, nil)
 
-	resp, err := server.ListStudents(context.Background(), &proto.ListStudentsRequest{Grade: grade})
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if len(resp.Students) != len(students) {
-		t.Errorf("expected %d students, got %d", len(students), len(resp.Students))
-	}
+	resp, err := s.server.ListStudents(ctx, &proto.ListStudentsRequest{Grade: grade})
+	require.NoError(s.T(), err)
+	s.Len(resp.Students, len(students))
 }
 
-func TestStudentServer_ListStudents_EmptyList(t *testing.T) {
-	ctrl, mockRepo, _, _, server := setupTest(t)
-	defer ctrl.Finish()
-
+func (s *StudentServiceTestSuite) TestListStudents_EmptyList() {
+	ctx := context.Background()
 	grade := int32(10)
 
-	mockRepo.EXPECT().
-		ListByGrade(gomock.Any(), grade).
-		Return([]student.Student{}, nil)
+	s.mockRepo.EXPECT().ListByGrade(gomock.Any(), grade).Return([]student.Student{}, nil)
 
-	resp, err := server.ListStudents(context.Background(), &proto.ListStudentsRequest{Grade: grade})
-
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	if len(resp.Students) != 0 {
-		t.Errorf("expected empty list, got %d students", len(resp.Students))
-	}
+	resp, err := s.server.ListStudents(ctx, &proto.ListStudentsRequest{Grade: grade})
+	require.NoError(s.T(), err)
+	require.Empty(s.T(), resp.Students)
 }
 
-func TestStudentServer_ListStudents_DBError(t *testing.T) {
-	ctrl, mockRepo, _, _, server := setupTest(t)
-	defer ctrl.Finish()
-
+func (s *StudentServiceTestSuite) TestListStudents_DBError() {
+	ctx := context.Background()
 	grade := int32(10)
-	dbErr := errors.New("db error")
 
-	mockRepo.EXPECT().
-		ListByGrade(gomock.Any(), grade).
-		Return(nil, dbErr)
+	s.mockRepo.EXPECT().ListByGrade(gomock.Any(), grade).Return(nil, errors.New("db error"))
 
-	_, err := server.ListStudents(context.Background(), &proto.ListStudentsRequest{Grade: grade})
-
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
+	_, err := s.server.ListStudents(ctx, &proto.ListStudentsRequest{Grade: grade})
+	s.Error(err)
 
 	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.Internal {
-		t.Fatalf("expected Internal error, got %v", err)
-	}
+	require.True(s.T(), ok)
+	s.Equal(codes.Internal, st.Code())
+}
+
+func TestStudentServiceTestSuite(t *testing.T) {
+	suite.Run(t, new(StudentServiceTestSuite))
 }
