@@ -76,7 +76,7 @@ func (s *StudentServiceTestSuite) TestCreateStudent_Success() {
 	resp, err := s.server.CreateStudent(ctx, req)
 
 	require.NoError(s.T(), err)
-	s.Equal("generated-id", resp.GetId())
+	require.Equal(s.T(), "generated-id", resp.GetId())
 }
 
 func (s *StudentServiceTestSuite) TestCreateStudent_DBError() {
@@ -90,10 +90,10 @@ func (s *StudentServiceTestSuite) TestCreateStudent_DBError() {
 	s.mockRepo.EXPECT().Create(ctx, gomock.Any()).Return("", errors.New("db error"))
 
 	_, err := s.server.CreateStudent(ctx, req)
-	s.Error(err)
+	require.Error(s.T(), err)
 	st, ok := status.FromError(err)
 	require.True(s.T(), ok)
-	s.Equal(codes.Internal, st.Code())
+	require.Equal(s.T(), codes.Internal, st.Code())
 }
 
 func (s *StudentServiceTestSuite) TestGetStudent_Success() {
@@ -110,11 +110,11 @@ func (s *StudentServiceTestSuite) TestGetStudent_Success() {
 
 	resp, err := s.server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: id})
 	require.NoError(s.T(), err)
-	s.Equal(id, resp.Student.Id)
-	s.Equal("Alice", resp.Student.FirstName)
-	s.Equal("Smith", resp.Student.LastName)
-	s.Equal(int32(9), resp.Student.Grade)
-	s.WithinDuration(expectedTime, resp.Student.CreatedAt.AsTime(), time.Second)
+	require.Equal(s.T(), id, resp.Student.Id)
+	require.Equal(s.T(), "Alice", resp.Student.FirstName)
+	require.Equal(s.T(), "Smith", resp.Student.LastName)
+	require.Equal(s.T(), int32(9), resp.Student.Grade)
+	require.WithinDuration(s.T(), expectedTime, resp.Student.CreatedAt.AsTime(), time.Second)
 }
 
 func (s *StudentServiceTestSuite) TestGetStudent_NotFound() {
@@ -126,11 +126,11 @@ func (s *StudentServiceTestSuite) TestGetStudent_NotFound() {
 
 	_, err := s.server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
 
-	s.Error(err)
+	require.Error(s.T(), err)
 
 	st, ok := status.FromError(err)
 	require.True(s.T(), ok)
-	s.Equal(codes.NotFound, st.Code())
+	require.Equal(s.T(), codes.NotFound, st.Code())
 }
 
 func (s *StudentServiceTestSuite) TestGetStudent_DBError() {
@@ -143,11 +143,11 @@ func (s *StudentServiceTestSuite) TestGetStudent_DBError() {
 
 	_, err := s.server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
 
-	s.Error(err)
+	require.Error(s.T(), err)
 
 	st, ok := status.FromError(err)
 	require.True(s.T(), ok)
-	s.Equal(codes.Internal, st.Code())
+	require.Equal(s.T(), codes.Internal, st.Code())
 }
 
 func (s *StudentServiceTestSuite) TestUpdateStudent_Success() {
@@ -222,11 +222,11 @@ func (s *StudentServiceTestSuite) TestUpdateStudent_DBError() {
 
 	_, err := s.server.UpdateStudent(ctx, req)
 
-	s.Error(err)
+	require.Error(s.T(), err)
 
 	st, ok := status.FromError(err)
 	require.True(s.T(), ok)
-	s.Equal(codes.Internal, st.Code())
+	require.Equal(s.T(), codes.Internal, st.Code())
 }
 
 func (s *StudentServiceTestSuite) TestDeleteStudent_Success() {
@@ -260,11 +260,11 @@ func (s *StudentServiceTestSuite) TestDeleteStudent_DBError() {
 	s.mockRepo.EXPECT().Delete(gomock.Any(), studentID).Return(errors.New("db error"))
 
 	_, err := s.server.DeleteStudent(ctx, &proto.DeleteStudentRequest{Id: studentID})
-	s.Error(err)
+	require.Error(s.T(), err)
 
 	st, ok := status.FromError(err)
 	require.True(s.T(), ok)
-	s.Equal(codes.Internal, st.Code())
+	require.Equal(s.T(), codes.Internal, st.Code())
 }
 
 func (s *StudentServiceTestSuite) TestListStudents_Success() {
@@ -279,7 +279,7 @@ func (s *StudentServiceTestSuite) TestListStudents_Success() {
 
 	resp, err := s.server.ListStudents(ctx, &proto.ListStudentsRequest{Grade: grade})
 	require.NoError(s.T(), err)
-	s.Len(resp.Students, len(students))
+	require.Len(s.T(), resp.Students, len(students))
 }
 
 func (s *StudentServiceTestSuite) TestListStudents_EmptyList() {
@@ -300,11 +300,11 @@ func (s *StudentServiceTestSuite) TestListStudents_DBError() {
 	s.mockRepo.EXPECT().ListByGrade(gomock.Any(), grade).Return(nil, errors.New("db error"))
 
 	_, err := s.server.ListStudents(ctx, &proto.ListStudentsRequest{Grade: grade})
-	s.Error(err)
+	require.Error(s.T(), err)
 
 	st, ok := status.FromError(err)
 	require.True(s.T(), ok)
-	s.Equal(codes.Internal, st.Code())
+	require.Equal(s.T(), codes.Internal, st.Code())
 }
 
 func TestStudentServiceTestSuite(t *testing.T) {
