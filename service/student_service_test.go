@@ -47,13 +47,20 @@ func (s *StudentServiceTestSuite) SetupTest() {
 	s.server = service.NewStudentServer(s.mockRepo, s.mockTime, s.mockTx, idGen)
 }
 
-func (s *StudentServiceTestSuite) TestSuiteRuns() {
-	s.T().Log("Test suite is running")
-	s.True(true)
+func (s *StudentServiceTestSuite) TestSanity() {
+	require.NotNil(s.T(), s.server, "StudentServer should be initialized in SetupTest")
 }
 
 func (s *StudentServiceTestSuite) TearDownTest() {
 	s.ctrl.Finish()
+}
+
+func (s *StudentServiceTestSuite) expectTransaction() {
+	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(ctx)
+		},
+	)
 }
 
 func (s *StudentServiceTestSuite) TestCreateStudent_Success() {
@@ -74,11 +81,7 @@ func (s *StudentServiceTestSuite) TestCreateStudent_Success() {
 	}
 
 	s.mockTime.EXPECT().Now().Return(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
-	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	)
+	s.expectTransaction()
 	s.mockRepo.EXPECT().Create(ctx, gomock.Eq(expectedStudent)).Return("generated-id", nil)
 
 	resp, err := s.server.CreateStudent(ctx, req)
@@ -92,9 +95,7 @@ func (s *StudentServiceTestSuite) TestCreateStudent_DBError() {
 	req := &proto.CreateStudentRequest{FirstName: "Fail", LastName: "Case", Grade: 10}
 
 	s.mockTime.EXPECT().Now().Return(time.Now()).AnyTimes()
-	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, fn func(context.Context) error) error {
-		return fn(ctx)
-	})
+	s.expectTransaction()
 	s.mockRepo.EXPECT().Create(ctx, gomock.Any()).Return("", errors.New("db error"))
 
 	_, err := s.server.CreateStudent(ctx, req)
@@ -164,11 +165,7 @@ func (s *StudentServiceTestSuite) TestUpdateStudent_Success() {
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
 
-	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	)
+	s.expectTransaction()
 
 	existingStudent := &student.Student{
 		ID:        "some-id",
@@ -214,11 +211,7 @@ func (s *StudentServiceTestSuite) TestUpdateStudent_GradeDecrease_ShouldFail() {
 		CreatedAt: fixedTime,
 	}
 
-	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	)
+	s.expectTransaction()
 	s.mockRepo.EXPECT().GetByID(gomock.Any(), "some-id").Return(existingStudent, nil)
 
 	req := &proto.UpdateStudentRequest{
@@ -244,11 +237,7 @@ func (s *StudentServiceTestSuite) TestUpdateStudent_DBError() {
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
 
-	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	)
+	s.expectTransaction()
 
 	s.mockRepo.EXPECT().
 		GetByID(gomock.Any(), "some-id").
@@ -286,11 +275,7 @@ func (s *StudentServiceTestSuite) TestDeleteStudent_Success() {
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 
 	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	)
+	s.expectTransaction()
 	s.mockRepo.EXPECT().Delete(gomock.Any(), studentID).Return(nil)
 
 	_, err := s.server.DeleteStudent(ctx, &proto.DeleteStudentRequest{Id: studentID})
@@ -303,11 +288,7 @@ func (s *StudentServiceTestSuite) TestDeleteStudent_DBError() {
 	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 
 	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	)
+	s.expectTransaction()
 	s.mockRepo.EXPECT().Delete(gomock.Any(), studentID).Return(errors.New("db error"))
 
 	_, err := s.server.DeleteStudent(ctx, &proto.DeleteStudentRequest{Id: studentID})
