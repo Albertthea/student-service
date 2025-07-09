@@ -2,6 +2,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -92,6 +93,21 @@ func NewApp(cfg *config.Config) (*App, error) {
 }
 
 // Run starts the gRPC server and listens for incoming connections.
-func (a *App) Run() error {
-	return a.grpcServer.Serve(a.listener)
+func (a *App) Run(ctx context.Context) error {
+	errCh := make(chan error, 1)
+
+	go func() {
+		if err := a.grpcServer.Serve(a.listener); err != nil {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Println("Context cancelled: shutting down gRPC server gracefully...")
+		a.grpcServer.GracefulStop()
+		return nil
+	case err := <-errCh:
+		return fmt.Errorf("gRPC server failed: %w", err)
+	}
 }

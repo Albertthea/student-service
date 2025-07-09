@@ -2,7 +2,10 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os/signal"
+	"syscall"
 
 	"example.com/student-service/internal/app"
 	"example.com/student-service/internal/config"
@@ -17,13 +20,18 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	application, err := app.NewApp(cfg)
 
 	if err != nil {
 		log.Fatalf("failed to initialize app: %v", err)
 	}
 
-	if err := application.Run(); err != nil {
+	if err := application.Run(ctx); err != nil {
 		log.Fatalf("application exited with error: %v", err)
 	}
+
+	log.Println("application stopped gracefully")
 }
