@@ -201,6 +201,43 @@ func (s *StudentServiceTestSuite) TestUpdateStudent_Success() {
 	require.NoError(s.T(), err)
 }
 
+func (s *StudentServiceTestSuite) TestUpdateStudent_GradeDecrease_ShouldFail() {
+	ctx := context.Background()
+	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
+	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
+
+	existingStudent := &student.Student{
+		ID:        "some-id",
+		FirstName: "Dobby",
+		LastName:  "Surname",
+		Grade:     10,
+		CreatedAt: fixedTime,
+	}
+
+	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, fn func(context.Context) error) error {
+			return fn(ctx)
+		},
+	)
+	s.mockRepo.EXPECT().GetByID(gomock.Any(), "some-id").Return(existingStudent, nil)
+
+	req := &proto.UpdateStudentRequest{
+		Student: &proto.Student{
+			Id:        "some-id",
+			FirstName: "Dobby",
+			LastName:  "Surname",
+			Grade:     9, // downgrade!
+		},
+	}
+
+	_, err := s.server.UpdateStudent(ctx, req)
+	require.Error(s.T(), err)
+
+	st, ok := status.FromError(err)
+	require.True(s.T(), ok)
+	require.Equal(s.T(), codes.FailedPrecondition, st.Code())
+}
+
 func (s *StudentServiceTestSuite) TestUpdateStudent_DBError() {
 	ctx := context.Background()
 
