@@ -64,6 +64,14 @@ func (s *StudentServiceTestSuite) TestCreateStudent_Success() {
 		LastName:  "Petrov",
 		Grade:     9,
 	}
+	createdAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	expectedStudent := student.Student{
+		ID:        "generated-id",
+		FirstName: "Ivan",
+		LastName:  "Petrov",
+		Grade:     9,
+		CreatedAt: createdAt,
+	}
 
 	s.mockTime.EXPECT().Now().Return(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -71,7 +79,7 @@ func (s *StudentServiceTestSuite) TestCreateStudent_Success() {
 			return fn(ctx)
 		},
 	)
-	s.mockRepo.EXPECT().Create(ctx, gomock.Any()).Return("generated-id", nil)
+	s.mockRepo.EXPECT().Create(ctx, gomock.Eq(expectedStudent)).Return("generated-id", nil)
 
 	resp, err := s.server.CreateStudent(ctx, req)
 
@@ -162,17 +170,23 @@ func (s *StudentServiceTestSuite) TestUpdateStudent_Success() {
 		},
 	)
 
-	s.mockRepo.EXPECT().
-		GetByID(gomock.Any(), "some-id").
-		Return(&student.Student{
-			ID:        "some-id",
-			FirstName: "Dobby",
-			LastName:  "Surname",
-			Grade:     9,
-			CreatedAt: fixedTime,
-		}, nil)
+	existingStudent := &student.Student{
+		ID:        "some-id",
+		FirstName: "Dobby",
+		LastName:  "Surname",
+		Grade:     9,
+		CreatedAt: fixedTime,
+	}
+	updatedStudent := student.Student{
+		ID:        "some-id",
+		FirstName: "John",
+		LastName:  "Doe",
+		Grade:     10,
+		CreatedAt: fixedTime,
+	}
 
-	s.mockRepo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(nil)
+	s.mockRepo.EXPECT().GetByID(gomock.Any(), "some-id").Return(existingStudent, nil)
+	s.mockRepo.EXPECT().Update(gomock.Any(), gomock.Eq(updatedStudent)).Return(nil)
 
 	req := &proto.UpdateStudentRequest{
 		Student: &proto.Student{
