@@ -160,3 +160,32 @@ Protocol Buffers compiler (protoc) >= 3.21.0
 gRPC codegen plugins
   protoc-gen-go v1.30.0+
   protoc-gen-go-grpc v1.3.0+
+
+## Mocks Generation
+Mocks are generated using GoMock via the mockgen tool.
+
+To install mockgen:
+
+```bash
+go install go.uber.org/mock/mockgen@latest
+```
+
+To regenerate mocks for service interfaces:
+
+```bash
+mockgen -source=service/interface.go -destination=service/mocks/mocks.go -package=mocks
+```
+
+This command generates mocks for the interfaces defined in service/interface.go and writes them to service/mocks/mocks.go.
+
+## Running Tests
+To run all unit tests:
+
+```bash
+go test ./...
+```
+For verbose output:
+
+```bash
+go test -v ./...
+```

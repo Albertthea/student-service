@@ -58,3 +58,18 @@ func WithTransaction(ctx context.Context, db *sqlx.DB, run func(ctx context.Cont
 
 	return nil
 }
+
+// Manager handles transactions using a provided sqlx.DB.
+type Manager struct {
+	db *sqlx.DB
+}
+
+// NewManager creates a new Manager with the given database.
+func NewManager(db *sqlx.DB) *Manager {
+	return &Manager{db: db}
+}
+
+// WithTransaction implements the TxManager interface using the shared WithTransaction logic.
+func (m *Manager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return WithTransaction(ctx, m.db, fn)
+}

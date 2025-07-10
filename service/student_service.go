@@ -5,12 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"example.com/student-service/internal/txmanager"
 	"example.com/student-service/proto"
 	"example.com/student-service/repository/student"
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -20,20 +17,26 @@ import (
 // StudentServer implements the StudentServiceServer gRPC interface.
 type StudentServer struct {
 	proto.UnimplementedStudentServiceServer
-	repo *student.Repository
+	repo         Repository
+	timeProvider TimeProvider
+	txManager    TxManager
+	idGenerator  IDGenerator
 }
 
 // NewStudentServer creates a new instance of StudentServer.
-func NewStudentServer(repo *student.Repository) *StudentServer {
+func NewStudentServer(repo Repository, timeProvider TimeProvider, txManager TxManager, idGen IDGenerator) *StudentServer {
 	return &StudentServer{
-		repo: repo,
+		repo:         repo,
+		timeProvider: timeProvider,
+		txManager:    txManager,
+		idGenerator:  idGen,
 	}
 }
 
 // CreateStudent handles a gRPC request to create a new student.
 func (s *StudentServer) CreateStudent(ctx context.Context, req *proto.CreateStudentRequest) (*proto.CreateStudentResponse, error) {
-	id := uuid.New().String()
-	now := time.Now()
+	id := s.idGenerator.GenerateID()
+	now := s.timeProvider.Now()
 
 	st := student.Student{
 		ID:        id,
@@ -42,7 +45,7 @@ func (s *StudentServer) CreateStudent(ctx context.Context, req *proto.CreateStud
 		Grade:     req.Grade,
 		CreatedAt: now,
 	}
-	err := txmanager.WithTransaction(ctx, s.repo.DB(), func(txCtx context.Context) error {
+	err := s.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
 		_, err := s.repo.Create(txCtx, st)
 		return err
 	})
@@ -76,7 +79,7 @@ func (s *StudentServer) GetStudent(ctx context.Context, req *proto.GetStudentReq
 
 // UpdateStudent handles a gRPC request to update an existing student's data.
 func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStudentRequest) (*emptypb.Empty, error) {
-	err := txmanager.WithTransaction(ctx, s.repo.DB(), func(txCtx context.Context) error {
+	err := s.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
 		existing, err := s.repo.GetByID(txCtx, req.Student.Id)
 		if err != nil {
 			if errors.Is(err, student.ErrNotFound) {
@@ -122,7 +125,7 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
 
 // DeleteStudent handles a gRPC request to delete a student by ID.
 func (s *StudentServer) DeleteStudent(ctx context.Context, req *proto.DeleteStudentRequest) (*emptypb.Empty, error) {
-	err := txmanager.WithTransaction(ctx, s.repo.DB(), func(txCtx context.Context) error {
+	err := s.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
 		return s.repo.Delete(txCtx, req.Id)
 	})
 	if err != nil {
