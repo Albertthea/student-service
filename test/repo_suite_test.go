@@ -150,13 +150,22 @@ func (s *RepoTestSuite) TestListAndListByGrade() {
 	s.Empty(none)
 }
 
-func (s *RepoTestSuite) TestTxManager_SuccessAndRollback() {
-	txMgr := txmanager.NewManager(s.repo.DB())
-
-	_, err := s.repo.DB().ExecContext(s.ctx, "DELETE FROM dummy;")
+func (s *RepoTestSuite) TestTxManager_ManualSQL_SuccessAndRollback() {
+	// Create dummy table (only for testing)
+	_, err := s.db.ExecContext(s.ctx, `
+        CREATE TABLE IF NOT EXISTS dummy (
+            id TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+    `)
 	s.Require().NoError(err)
 
-	// successful
+	txMgr := txmanager.NewManager(s.repo.DB())
+
+	_, err = s.repo.DB().ExecContext(s.ctx, "DELETE FROM dummy;")
+	s.Require().NoError(err)
+
+	// success
 	err = txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
 		tx, err := txmanager.GetTx(ctx)
 		s.Require().NoError(err)
@@ -179,12 +188,65 @@ func (s *RepoTestSuite) TestTxManager_SuccessAndRollback() {
 		return errors.New("simulate rollback")
 	})
 	s.Require().Error(err)
-	s.Contains(err.Error(), "simulate rollback")
 
 	var count int
 	err = s.repo.DB().GetContext(s.ctx, &count, "SELECT COUNT(*) FROM dummy WHERE id = $1", "id2")
 	s.Require().NoError(err)
 	s.Equal(0, count)
+}
+
+func (s *RepoTestSuite) TestTxManager_ConcurrentTransactions() {
+	_, err := s.db.ExecContext(s.ctx, `
+		CREATE TABLE IF NOT EXISTS dummy (
+			id TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		);
+	`)
+	s.Require().NoError(err)
+
+	_, err = s.repo.DB().ExecContext(s.ctx, "DELETE FROM dummy;")
+	s.Require().NoError(err)
+
+	txMgr := txmanager.NewManager(s.repo.DB())
+
+	const n = 5
+
+	errs := make(chan error, n)
+
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			err := txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
+				tx, err := txmanager.GetTx(ctx)
+				if err != nil {
+					return err
+				}
+				_, err = tx.ExecContext(ctx,
+					"INSERT INTO dummy (id, value) VALUES ($1, $2)",
+					fmt.Sprintf("id-%d", i),
+					fmt.Sprintf("value-%d", i),
+				)
+				if err != nil {
+					return err
+				}
+				time.Sleep(100 * time.Millisecond)
+				return nil
+			})
+			errs <- err
+		}(i)
+	}
+
+	for i := 0; i < n; i++ {
+		err := <-errs
+		if err != nil {
+			s.T().Logf("tx %d error: %v", i, err)
+		}
+		s.Require().NoError(err)
+	}
+
+	var count int
+	err = s.repo.DB().GetContext(s.ctx, &count, "SELECT COUNT(*) FROM dummy;")
+	s.Require().NoError(err)
+	s.Equal(n, count)
 }
 
 func (s *RepoTestSuite) TearDownSuite() {

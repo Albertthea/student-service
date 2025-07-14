@@ -7,8 +7,3 @@ CREATE TABLE IF NOT EXISTS students (
 );
 
 CREATE INDEX IF NOT EXISTS idx_students_grade ON students (grade);
-
-CREATE TABLE dummy (
-    id TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
