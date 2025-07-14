@@ -149,3 +149,14 @@ func (r *Repository) ListByGrade(ctx context.Context, grade int32) ([]Student, e
 	}
 	return result, nil
 }
+
+// List returns all student records from the database.
+func (r *Repository) List(ctx context.Context) ([]Student, error) {
+	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at FROM %s`, tableName)
+	var students []Student
+	err := r.db.SelectContext(ctx, &students, query)
+	if err != nil {
+		return nil, fmt.Errorf("list students: %w", err)
+	}
+	return students, nil
+}
