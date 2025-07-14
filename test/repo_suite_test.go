@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	_ "embed"
 	"testing"
 	"time"
 
@@ -14,6 +15,9 @@ import (
 	"example.com/student-service/repository/student"
 	"example.com/student-service/service"
 )
+
+//go:embed migrations/00000_initial.sql
+var migrationSQL string
 
 type RepoTestSuite struct {
 	suite.Suite
@@ -31,7 +35,6 @@ func (s *RepoTestSuite) SetupSuite() {
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
-		postgres.WithInitScripts("migrations/init.sql"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").WithStartupTimeout(30*time.Second),
 		),
@@ -44,6 +47,9 @@ func (s *RepoTestSuite) SetupSuite() {
 	s.Require().NoError(err)
 
 	db, err := sqlx.Open("postgres", dsn)
+	s.Require().NoError(err)
+
+	_, err = db.Exec(migrationSQL)
 	s.Require().NoError(err)
 
 	s.repo = student.NewRepository(db)
