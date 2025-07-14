@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
@@ -68,6 +69,7 @@ func (s *RepoTestSuite) TestCreateGetUpdateDeleteStudent() {
 	txMgr := txmanager.NewManager(s.stRepo.DB())
 
 	st := student.Student{
+		ID:        uuid.New().String(),
 		FirstName: "Ivan",
 		LastName:  "Ivanov",
 		Grade:     5,
@@ -126,6 +128,7 @@ func (s *RepoTestSuite) TestListAndListByGrade() {
 	grades := []int32{1, 2, 2, 3}
 	for i, g := range grades {
 		st := student.Student{
+			ID:        uuid.New().String(),
 			FirstName: fmt.Sprintf("Name%d", i),
 			LastName:  "Test",
 			Grade:     g,

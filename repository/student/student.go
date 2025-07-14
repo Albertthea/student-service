@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"example.com/student-service/internal/txmanager"
-	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -50,7 +49,7 @@ func NewRepository(db *sqlx.DB) *Repository {
 // Create inserts a new student record into the database.
 func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 	if s.ID == "" {
-		s.ID = uuid.New().String()
+		return "", fmt.Errorf("create student: ID must be specified")
 	}
 
 	tx, err := txmanager.GetTx(ctx)
