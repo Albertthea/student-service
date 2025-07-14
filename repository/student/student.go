@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"example.com/student-service/internal/txmanager"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -48,6 +49,10 @@ func NewRepository(db *sqlx.DB) *Repository {
 
 // Create inserts a new student record into the database.
 func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
+	if s.ID == "" {
+		s.ID = uuid.New().String()
+	}
+
 	tx, err := txmanager.GetTx(ctx)
 	if err != nil {
 		return "", fmt.Errorf("create student: tx required: %w", err)
@@ -56,7 +61,6 @@ func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 	query := fmt.Sprintf(`INSERT INTO %s (%s) VALUES %s`, tableName, ColumnsStr(), NamedPlaceholders())
 
 	_, err = tx.NamedExecContext(ctx, query, &s)
-
 	if err != nil {
 		return "", fmt.Errorf("create student: insert: %w", err)
 	}

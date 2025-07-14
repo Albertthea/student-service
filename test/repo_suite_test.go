@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -13,8 +14,11 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"example.com/student-service/internal/txmanager"
 	"example.com/student-service/repository/student"
 	"example.com/student-service/service"
+
+	_ "github.com/lib/pq"
 )
 
 //go:embed migrations/00000_initial.sql
@@ -24,7 +28,9 @@ type RepoTestSuite struct {
 	suite.Suite
 	ctx       context.Context
 	container *postgres.PostgresContainer
+	db        *sqlx.DB
 	repo      service.Repository
+	stRepo    *student.Repository
 }
 
 func (s *RepoTestSuite) SetupSuite() {
@@ -40,7 +46,6 @@ func (s *RepoTestSuite) SetupSuite() {
 			wait.ForLog("database system is ready to accept connections").WithStartupTimeout(30*time.Second),
 		),
 	)
-
 	s.Require().NoError(err)
 	s.container = container
 
@@ -49,59 +54,75 @@ func (s *RepoTestSuite) SetupSuite() {
 
 	db, err := sqlx.Open("postgres", dsn)
 	s.Require().NoError(err)
+	s.Require().NoError(waitForDB(db))
 
 	_, err = db.Exec(migrationSQL)
 	s.Require().NoError(err)
 
+	s.db = db
 	s.repo = student.NewRepository(db)
+	s.stRepo = s.repo.(*student.Repository)
 }
 
 func (s *RepoTestSuite) TestCreateGetUpdateDeleteStudent() {
-	// Create a new student record
+	txMgr := txmanager.NewManager(s.stRepo.DB())
+
 	st := student.Student{
 		FirstName: "Ivan",
 		LastName:  "Ivanov",
 		Grade:     5,
 	}
-	id, err := s.repo.Create(s.ctx, st)
+
+	var id string
+	err := txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
+		var err error
+		id, err = s.repo.Create(ctx, st)
+		return err
+	})
 	s.Require().NoError(err)
 	s.Require().NotEmpty(id)
 
-	// Retrieve the student by ID and verify the fields
+	// Get after transaction committed
 	got, err := s.repo.GetByID(s.ctx, id)
 	s.Require().NoError(err)
 	s.Equal("Ivan", got.FirstName)
 	s.Equal("Ivanov", got.LastName)
 	s.Equal(int32(5), got.Grade)
 
-	// Update student's last name and grade
+	// Update inside transaction
 	got.LastName = "Petrov"
 	got.Grade = 6
-	err = s.repo.Update(s.ctx, *got)
+	err = txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
+		return s.repo.Update(ctx, *got)
+	})
 	s.Require().NoError(err)
 
-	// Retrieve again to confirm updates persisted
+	// Get updated
 	updated, err := s.repo.GetByID(s.ctx, id)
 	s.Require().NoError(err)
 	s.Equal("Petrov", updated.LastName)
 	s.Equal(int32(6), updated.Grade)
 
-	// Delete the student record
-	err = s.repo.Delete(s.ctx, id)
+	// Delete inside transaction
+	err = txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
+		return s.repo.Delete(ctx, id)
+	})
 	s.Require().NoError(err)
 
-	// Verify that the student no longer exists
-	deleted, err := s.repo.GetByID(s.ctx, id)
-	s.Require().NoError(err)
-	s.Nil(deleted)
+	// Verify deletion
+	_, err = s.repo.GetByID(s.ctx, id)
+	s.Require().Error(err)
+	s.ErrorIs(err, student.ErrNotFound)
 }
 
 func (s *RepoTestSuite) TestListAndListByGrade() {
-	// Clean table
-	_, _, err := s.container.Exec(s.ctx, []string{"psql", "-U", "postgres", "-d", "testdb", "-c", "DELETE FROM students;"})
+	txMgr := txmanager.NewManager(s.stRepo.DB())
+
+	_, _, err := s.container.Exec(s.ctx, []string{
+		"psql", "-U", "postgres", "-d", "testdb", "-c", "DELETE FROM students;",
+	})
 	s.Require().NoError(err)
 
-	// Create students with different grade
 	grades := []int32{1, 2, 2, 3}
 	for i, g := range grades {
 		st := student.Student{
@@ -109,31 +130,83 @@ func (s *RepoTestSuite) TestListAndListByGrade() {
 			LastName:  "Test",
 			Grade:     g,
 		}
-		_, err := s.repo.Create(s.ctx, st)
+		err := txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
+			_, err := s.repo.Create(ctx, st)
+			return err
+		})
 		s.Require().NoError(err)
 	}
 
-	// Check that list return all
 	all, err := s.repo.List(s.ctx)
 	s.Require().NoError(err)
 	s.Len(all, len(grades))
 
-	// Should be 2 students
 	gradeTwo, err := s.repo.ListByGrade(s.ctx, 2)
 	s.Require().NoError(err)
 	s.Len(gradeTwo, 2)
 
-	// List should be empty
 	none, err := s.repo.ListByGrade(s.ctx, 99)
 	s.Require().NoError(err)
 	s.Empty(none)
 }
 
+func (s *RepoTestSuite) TestTxManager_SuccessAndRollback() {
+	txMgr := txmanager.NewManager(s.stRepo.DB())
+
+	_, err := s.stRepo.DB().ExecContext(s.ctx, "DELETE FROM dummy;")
+	s.Require().NoError(err)
+
+	// successful
+	err = txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
+		tx, err := txmanager.GetTx(ctx)
+		s.Require().NoError(err)
+		_, err = tx.ExecContext(ctx, `INSERT INTO dummy (id, value) VALUES ('id1', 'value1')`)
+		return err
+	})
+	s.Require().NoError(err)
+
+	var value string
+	err = s.stRepo.DB().GetContext(s.ctx, &value, "SELECT value FROM dummy WHERE id = $1", "id1")
+	s.Require().NoError(err)
+	s.Equal("value1", value)
+
+	// rollback
+	err = txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
+		tx, err := txmanager.GetTx(ctx)
+		s.Require().NoError(err)
+		_, err = tx.ExecContext(ctx, `INSERT INTO dummy (id, value) VALUES ('id2', 'value2')`)
+		s.Require().NoError(err)
+		return errors.New("simulate rollback")
+	})
+	s.Require().Error(err)
+	s.Contains(err.Error(), "simulate rollback")
+
+	var count int
+	err = s.stRepo.DB().GetContext(s.ctx, &count, "SELECT COUNT(*) FROM dummy WHERE id = $1", "id2")
+	s.Require().NoError(err)
+	s.Equal(0, count)
+}
+
 func (s *RepoTestSuite) TearDownSuite() {
+	if err := s.db.Close(); err != nil {
+		s.T().Logf("Error closing DB: %v", err)
+	}
 	err := s.container.Terminate(s.ctx)
 	s.Require().NoError(err)
 }
 
 func TestRepoTestSuite(t *testing.T) {
 	suite.Run(t, new(RepoTestSuite))
+}
+
+func waitForDB(db *sqlx.DB) error {
+	const maxAttempts = 10
+	const delay = time.Second
+	for i := 0; i < maxAttempts; i++ {
+		if err := db.Ping(); err == nil {
+			return nil
+		}
+		time.Sleep(delay)
+	}
+	return errors.New("database not reachable after waiting")
 }
