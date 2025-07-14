@@ -17,7 +17,6 @@ import (
 
 	"example.com/student-service/internal/txmanager"
 	"example.com/student-service/repository/student"
-	"example.com/student-service/service"
 
 	_ "github.com/lib/pq"
 )
@@ -30,8 +29,7 @@ type RepoTestSuite struct {
 	ctx       context.Context
 	container *postgres.PostgresContainer
 	db        *sqlx.DB
-	repo      service.Repository
-	stRepo    *student.Repository
+	repo      *student.Repository
 }
 
 func (s *RepoTestSuite) SetupSuite() {
@@ -62,11 +60,10 @@ func (s *RepoTestSuite) SetupSuite() {
 
 	s.db = db
 	s.repo = student.NewRepository(db)
-	s.stRepo = s.repo.(*student.Repository)
 }
 
 func (s *RepoTestSuite) TestCreateGetUpdateDeleteStudent() {
-	txMgr := txmanager.NewManager(s.stRepo.DB())
+	txMgr := txmanager.NewManager(s.repo.DB())
 
 	st := student.Student{
 		ID:        uuid.New().String(),
@@ -118,7 +115,7 @@ func (s *RepoTestSuite) TestCreateGetUpdateDeleteStudent() {
 }
 
 func (s *RepoTestSuite) TestListAndListByGrade() {
-	txMgr := txmanager.NewManager(s.stRepo.DB())
+	txMgr := txmanager.NewManager(s.repo.DB())
 
 	_, _, err := s.container.Exec(s.ctx, []string{
 		"psql", "-U", "postgres", "-d", "testdb", "-c", "DELETE FROM students;",
@@ -154,9 +151,9 @@ func (s *RepoTestSuite) TestListAndListByGrade() {
 }
 
 func (s *RepoTestSuite) TestTxManager_SuccessAndRollback() {
-	txMgr := txmanager.NewManager(s.stRepo.DB())
+	txMgr := txmanager.NewManager(s.repo.DB())
 
-	_, err := s.stRepo.DB().ExecContext(s.ctx, "DELETE FROM dummy;")
+	_, err := s.repo.DB().ExecContext(s.ctx, "DELETE FROM dummy;")
 	s.Require().NoError(err)
 
 	// successful
@@ -169,7 +166,7 @@ func (s *RepoTestSuite) TestTxManager_SuccessAndRollback() {
 	s.Require().NoError(err)
 
 	var value string
-	err = s.stRepo.DB().GetContext(s.ctx, &value, "SELECT value FROM dummy WHERE id = $1", "id1")
+	err = s.repo.DB().GetContext(s.ctx, &value, "SELECT value FROM dummy WHERE id = $1", "id1")
 	s.Require().NoError(err)
 	s.Equal("value1", value)
 
@@ -185,7 +182,7 @@ func (s *RepoTestSuite) TestTxManager_SuccessAndRollback() {
 	s.Contains(err.Error(), "simulate rollback")
 
 	var count int
-	err = s.stRepo.DB().GetContext(s.ctx, &count, "SELECT COUNT(*) FROM dummy WHERE id = $1", "id2")
+	err = s.repo.DB().GetContext(s.ctx, &count, "SELECT COUNT(*) FROM dummy WHERE id = $1", "id2")
 	s.Require().NoError(err)
 	s.Equal(0, count)
 }

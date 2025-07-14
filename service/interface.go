@@ -15,7 +15,6 @@ type Repository interface {
 	Update(ctx context.Context, st student.Student) error
 	Delete(ctx context.Context, id string) error
 	ListByGrade(ctx context.Context, grade int32) ([]student.Student, error)
-	List(ctx context.Context) ([]student.Student, error)
 }
 
 // TimeProvider provides the current time. Useful for testing time-dependent logic.
