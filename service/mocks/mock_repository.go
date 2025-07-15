@@ -80,6 +80,21 @@ func (mr *MockRepositoryMockRecorder) GetByID(ctx, id interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockRepository)(nil).GetByID), ctx, id)
 }
 
+// List mocks base method.
+func (m *MockRepository) List(ctx context.Context) ([]student.Student, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", ctx)
+	ret0, _ := ret[0].([]student.Student)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MockRepositoryMockRecorder) List(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockRepository)(nil).List), ctx)
+}
+
 // ListByGrade mocks base method.
 func (m *MockRepository) ListByGrade(ctx context.Context, grade int32) ([]student.Student, error) {
 	m.ctrl.T.Helper()
@@ -181,4 +196,41 @@ func (m *MockTxManager) WithTransaction(ctx context.Context, fn func(context.Con
 func (mr *MockTxManagerMockRecorder) WithTransaction(ctx, fn interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTransaction", reflect.TypeOf((*MockTxManager)(nil).WithTransaction), ctx, fn)
+}
+
+// MockIDGenerator is a mock of IDGenerator interface.
+type MockIDGenerator struct {
+	ctrl     *gomock.Controller
+	recorder *MockIDGeneratorMockRecorder
+}
+
+// MockIDGeneratorMockRecorder is the mock recorder for MockIDGenerator.
+type MockIDGeneratorMockRecorder struct {
+	mock *MockIDGenerator
+}
+
+// NewMockIDGenerator creates a new mock instance.
+func NewMockIDGenerator(ctrl *gomock.Controller) *MockIDGenerator {
+	mock := &MockIDGenerator{ctrl: ctrl}
+	mock.recorder = &MockIDGeneratorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockIDGenerator) EXPECT() *MockIDGeneratorMockRecorder {
+	return m.recorder
+}
+
+// GenerateID mocks base method.
+func (m *MockIDGenerator) GenerateID() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenerateID")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GenerateID indicates an expected call of GenerateID.
+func (mr *MockIDGeneratorMockRecorder) GenerateID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateID", reflect.TypeOf((*MockIDGenerator)(nil).GenerateID))
 }

@@ -48,6 +48,10 @@ func NewRepository(db *sqlx.DB) *Repository {
 
 // Create inserts a new student record into the database.
 func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
+	if s.ID == "" {
+		return "", fmt.Errorf("create student: ID must be specified")
+	}
+
 	tx, err := txmanager.GetTx(ctx)
 	if err != nil {
 		return "", fmt.Errorf("create student: tx required: %w", err)
@@ -56,7 +60,6 @@ func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 	query := fmt.Sprintf(`INSERT INTO %s (%s) VALUES %s`, tableName, ColumnsStr(), NamedPlaceholders())
 
 	_, err = tx.NamedExecContext(ctx, query, &s)
-
 	if err != nil {
 		return "", fmt.Errorf("create student: insert: %w", err)
 	}
@@ -148,4 +151,15 @@ func (r *Repository) ListByGrade(ctx context.Context, grade int32) ([]Student, e
 		return nil, fmt.Errorf("list students by grade: %w", err)
 	}
 	return result, nil
+}
+
+// List returns all student records from the database.
+func (r *Repository) List(ctx context.Context) ([]Student, error) {
+	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at FROM %s`, tableName)
+	var students []Student
+	err := r.db.SelectContext(ctx, &students, query)
+	if err != nil {
+		return nil, fmt.Errorf("list students: %w", err)
+	}
+	return students, nil
 }
