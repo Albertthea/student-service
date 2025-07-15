@@ -2,7 +2,6 @@ package txmanager_test
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -166,11 +165,9 @@ func (s *TxManagerTestSuite) TestParallelTransactions_Conflicting() {
 	chContinue := make(chan struct{})
 	errCh := make(chan error, 2)
 
-	txOpts := &sql.TxOptions{Isolation: sql.LevelSerializable}
-
 	// Tx1
 	go func() {
-		err := s.txMgr.WithTransactionWithOptions(s.ctx, txOpts, func(ctx context.Context) error {
+		err := s.txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
 			tx, err := txmanager.GetTx(ctx)
 			s.Require().NoError(err)
 
@@ -199,7 +196,7 @@ func (s *TxManagerTestSuite) TestParallelTransactions_Conflicting() {
 
 	// Tx2
 	go func() {
-		err := s.txMgr.WithTransactionWithOptions(s.ctx, txOpts, func(ctx context.Context) error {
+		err := s.txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
 			tx, err := txmanager.GetTx(ctx)
 			s.Require().NoError(err)
 

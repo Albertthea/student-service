@@ -32,36 +32,13 @@ func GetTx(ctx context.Context) (*sqlx.Tx, error) {
 // WithTransaction manages a transaction lifecycle, beginning a transaction if needed,
 // running the function, and committing or rolling back depending on the result.
 func WithTransaction(ctx context.Context, db *sqlx.DB, run func(ctx context.Context) error) error {
-	if tx, _ := GetTx(ctx); tx != nil {
-		return run(ctx)
-	}
-
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-
-	ctxWithTx := contextWithTx(ctx, tx)
-
-	err = run(ctxWithTx)
-	if err != nil {
-		rbErr := tx.Rollback()
-		if rbErr != nil {
-			return fmt.Errorf("transaction: %w", errors.Join(err, rbErr))
-		}
-		return fmt.Errorf("transaction: %w", err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
-
-	return nil
+	return withTransactionWithOptions(ctx, db, &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+	}, run)
 }
 
-// WithTransactionWithOptions manages a transaction with custom sql.TxOptions.
-func WithTransactionWithOptions(ctx context.Context, db *sqlx.DB, opts *sql.TxOptions, run func(ctx context.Context) error) error {
+// withTransactionWithOptions manages a transaction with custom sql.TxOptions (internal use only).
+func withTransactionWithOptions(ctx context.Context, db *sqlx.DB, opts *sql.TxOptions, run func(ctx context.Context) error) error {
 	if tx, _ := GetTx(ctx); tx != nil {
 		return run(ctx)
 	}
@@ -103,9 +80,4 @@ func NewManager(db *sqlx.DB) *Manager {
 // WithTransaction implements the TxManager interface using the shared WithTransaction logic.
 func (m *Manager) WithTransaction(ctx context.Context, fn func(context.Context) error) error {
 	return WithTransaction(ctx, m.db, fn)
-}
-
-// WithTransactionWithOptions runs a function in a transaction with provided options.
-func (m *Manager) WithTransactionWithOptions(ctx context.Context, opts *sql.TxOptions, fn func(context.Context) error) error {
-	return WithTransactionWithOptions(ctx, m.db, opts, fn)
 }
