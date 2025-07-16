@@ -161,9 +161,14 @@ func (s *TxManagerTestSuite) TestParallelTransactions_Conflicting() {
 	_, err = s.db.ExecContext(s.ctx, `INSERT INTO dummy (id, value) VALUES ('id1', 'init');`)
 	s.Require().NoError(err)
 
+	type TxResult struct {
+		TxIdx int
+		Err   error
+	}
+
 	chReady := make(chan struct{})
 	chContinue := make(chan struct{})
-	errCh := make(chan error, 2)
+	errCh := make(chan TxResult, 2)
 
 	// Tx1
 	go func() {
@@ -191,7 +196,7 @@ func (s *TxManagerTestSuite) TestParallelTransactions_Conflicting() {
 			return nil
 		})
 		s.T().Logf("Tx1 done: %v", err)
-		errCh <- err
+		errCh <- TxResult{TxIdx: 1, Err: err}
 	}()
 
 	// Tx2
@@ -220,17 +225,17 @@ func (s *TxManagerTestSuite) TestParallelTransactions_Conflicting() {
 			return nil
 		})
 		s.T().Logf("Tx2 done: %v", err)
-		errCh <- err
+		errCh <- TxResult{TxIdx: 2, Err: err}
 	}()
 
-	err1 := <-errCh
-	err2 := <-errCh
+	res1 := <-errCh
+	res2 := <-errCh
 
-	s.T().Logf("Tx1 error: %v", err1)
-	s.T().Logf("Tx2 error: %v", err2)
+	s.T().Logf("Tx%d error: %v", res1.TxIdx, res1.Err)
+	s.T().Logf("Tx%d error: %v", res2.TxIdx, res2.Err)
 
-	s.True(err1 == nil || err2 == nil, "one transaction should succeed")
-	s.True(err1 != nil || err2 != nil, "one transaction should fail due to serialization conflict")
+	s.True((res1.Err == nil && res2.Err != nil) || (res1.Err != nil && res2.Err == nil),
+		"one transaction should succeed, the other should fail")
 }
 
 func TestTxManagerTestSuite(t *testing.T) {
