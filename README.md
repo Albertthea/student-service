@@ -6,13 +6,14 @@ Uses PostgreSQL for persistent storage, running via Docker for local development
 ## Project Structure
 ```text
 student-service/
-├── cmd/                        # Application entry point(s)
-├── proto/                      # Protobuf definitions
-├── repository/student/         # DB model and repository logic
-├── repository/migrations/      # SQL migrations
-├── service/                    # Business logic and gRPC service implementation
-├── docker-compose.yml          # PostgreSQL container setup
-├── go.mod / go.sum             # Go module definition
+├── cmd/                            # Application entry point(s)
+├── proto/                          # Protobuf definitions
+├── repository/student/             # DB model and repository logic
+├── repository/student/migrations/  # SQL migrations
+├── service/                        # Business logic and gRPC service implementation
+├── docker-compose.yml              # PostgreSQL container setup
+├── go.mod / go.sum                 # Go module definition
+└── README.md
 ```
 
 ## Code Generation
@@ -55,7 +56,7 @@ Port: 5432
 After the container is up, apply the initial schema:
 
 ```bash
-psql -h localhost -U student -d studentdb -f repository/migrations/00000_initial.sql
+psql -h localhost -U student -d studentdb -f repository/student/migrations/00000_initial.sql
 ```
 Password: 111111
 
@@ -95,7 +96,9 @@ Example Requests:
 grpcurl -plaintext -d '{
   "first_name": "Ivan",
   "last_name": "Petrov",
-  "grade": 9
+  "grade": 9,
+  "middleName": "Sergeevich",
+  "friends": ["8ce8cc1e-84ed-421a-b213-664c75a9904b"]
 }' localhost:50051 student.StudentService/CreateStudent
 ```
 
@@ -115,7 +118,9 @@ grpcurl -plaintext -d '{
     "id": "PASTE_ID_HERE",
     "first_name": "Ivan",
     "last_name": "Ivanov",
-    "grade": 10
+    "grade": 10,
+    "middleName": "Sergeevich",
+    "friends": ["8ce8cc1e-84ed-421a-b213-664c75a9904b"]
   }
 }' localhost:50051 student.StudentService/UpdateStudent
 ```
