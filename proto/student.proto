@@ -14,12 +14,63 @@ message Student {
     string last_name = 3;
     int32 grade = 4;
     google.protobuf.Timestamp created_at = 5;
+
+    // unset = unknown, zero value = no middle name
+     optional string middle_name = 6;
+
+    // Enum for student status
+    enum Status {
+        STATUS_UNSPECIFIED = 0;
+        ACTIVE = 1;
+        GRADUATED = 2;
+        SUSPENDED = 3;
+        EXCHANGE = 4;
+    }
+    Status status = 7;
+
+    message Address {
+        string street = 1;
+        string city = 2;
+        string country = 3;
+    }
+    Address home_address = 8;
+
+    oneof student_details {
+        LocalStudent local = 9;
+        ExchangeStudent exchange = 10;
+    }
+
+    message LocalStudent {
+        string national_id = 1;
+        bool scholarship = 2;
+    }
+
+    message ExchangeStudent {
+        string home_university = 1;
+        string country_of_origin = 2;
+        google.protobuf.Timestamp program_start = 3;
+        google.protobuf.Timestamp program_end = 4;
+    }
+
+    repeated string friends = 11;
+    map<string, string> course_grades = 12;
 }
 
 message CreateStudentRequest {
     string first_name = 1;
     string last_name = 2;
     int32 grade = 3;
+    optional string middle_name = 4;
+    Student.Status status = 5;
+    Student.Address home_address = 6;
+
+    oneof student_details {
+        Student.LocalStudent local = 7;
+        Student.ExchangeStudent exchange = 8;
+    }
+
+    repeated string friends = 9;
+    map<string, string> course_grades = 10;
 }
 
 message CreateStudentResponse {

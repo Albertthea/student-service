@@ -11,6 +11,7 @@ import (
 
 	"example.com/student-service/internal/txmanager"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 const tableName = "students"
@@ -24,11 +25,18 @@ var (
 
 // Student represents a student record in the database.
 type Student struct {
-	ID        string    `db:"id"`
-	FirstName string    `db:"first_name"`
-	LastName  string    `db:"last_name"`
-	Grade     int32     `db:"grade"`
-	CreatedAt time.Time `db:"created_at"`
+	ID           string         `db:"id" json:"id"`
+	FirstName    string         `db:"first_name" json:"first_name"`
+	LastName     string         `db:"last_name" json:"last_name"`
+	Grade        int32          `db:"grade" json:"grade"`
+	CreatedAt    time.Time      `db:"created_at" json:"created_at"`
+	MiddleName   sql.NullString `db:"middle_name" json:"middle_name"`
+	Status       sql.NullString `db:"status" json:"status"`
+	HomeAddress  sql.NullString `db:"home_address" json:"home_address"`
+	CourseGrades sql.NullString `db:"course_grades" json:"course_grades"`
+	Friends      pq.StringArray `db:"friends" json:"friends"`
+	Local        sql.NullString `db:"local" json:"local"`
+	Exchange     sql.NullString `db:"exchange" json:"exchange"`
 }
 
 // Repository manages operations with students in the DB.
@@ -70,7 +78,7 @@ func (r *Repository) Create(ctx context.Context, s Student) (string, error) {
 // GetByID retrieves a student by their ID.
 func (r *Repository) GetByID(ctx context.Context, id string) (*Student, error) {
 	var s Student
-	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at FROM %s WHERE id = $1`, tableName)
+	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at, middle_name, status, home_address, course_grades, friends, local, exchange FROM %s WHERE id = $1`, tableName)
 
 	if tx, err := txmanager.GetTx(ctx); err == nil {
 		if err := tx.GetContext(ctx, &s, query, id); err != nil {
@@ -144,7 +152,7 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 
 // ListByGrade returns all students for a specific grade.
 func (r *Repository) ListByGrade(ctx context.Context, grade int32) ([]Student, error) {
-	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at FROM %s WHERE grade = $1`, tableName)
+	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at, middle_name, status, home_address, course_grades, friends, local, exchange FROM %s WHERE grade = $1`, tableName)
 	var result []Student
 	err := r.db.SelectContext(ctx, &result, query, grade)
 	if err != nil {
@@ -155,7 +163,7 @@ func (r *Repository) ListByGrade(ctx context.Context, grade int32) ([]Student, e
 
 // List returns all student records from the database.
 func (r *Repository) List(ctx context.Context) ([]Student, error) {
-	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at FROM %s`, tableName)
+	query := fmt.Sprintf(`SELECT id, first_name, last_name, grade, created_at, middle_name, status, home_address, course_grades, friends, local, exchange FROM %s`, tableName)
 	var students []Student
 	err := r.db.SelectContext(ctx, &students, query)
 	if err != nil {

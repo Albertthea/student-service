@@ -3,8 +3,11 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"example.com/student-service/proto"
 	"example.com/student-service/repository/student"
@@ -38,15 +41,41 @@ func (s *StudentServer) CreateStudent(ctx context.Context, req *proto.CreateStud
 	id := s.idGenerator.GenerateID()
 	now := s.timeProvider.Now()
 
-	st := student.Student{
+	studentEntity := student.Student{
 		ID:        id,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
 		Grade:     req.Grade,
 		CreatedAt: now,
+
+		MiddleName:   nullStringPtr(req.MiddleName),
+		Status:       nullStringFromEnum(req.Status),
+		HomeAddress:  nullStringFromAddress(req.HomeAddress),
+		CourseGrades: nullStringFromMap(req.CourseGrades),
+		Friends:      req.Friends,
 	}
+
+	switch details := req.GetStudentDetails().(type) {
+	case *proto.CreateStudentRequest_Local:
+		if details.Local != nil {
+			b, err := json.Marshal(details.Local)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "invalid local data: %v", err)
+			}
+			studentEntity.Local = sql.NullString{String: string(b), Valid: true}
+		}
+	case *proto.CreateStudentRequest_Exchange:
+		if details.Exchange != nil {
+			b, err := json.Marshal(details.Exchange)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "invalid exchange data: %v", err)
+			}
+			studentEntity.Exchange = sql.NullString{String: string(b), Valid: true}
+		}
+	}
+
 	err := s.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
-		_, err := s.repo.Create(txCtx, st)
+		_, err := s.repo.Create(txCtx, studentEntity)
 		return err
 	})
 	if err != nil {
@@ -66,15 +95,62 @@ func (s *StudentServer) GetStudent(ctx context.Context, req *proto.GetStudentReq
 		return nil, status.Errorf(codes.Internal, "failed to get student: %v", err)
 	}
 
-	return &proto.GetStudentResponse{
-		Student: &proto.Student{
-			Id:        st.ID,
-			FirstName: st.FirstName,
-			LastName:  st.LastName,
-			Grade:     st.Grade,
-			CreatedAt: timestamppb.New(st.CreatedAt),
-		},
-	}, nil
+	pbStudent := &proto.Student{
+		Id:        st.ID,
+		FirstName: st.FirstName,
+		LastName:  st.LastName,
+		Grade:     st.Grade,
+		CreatedAt: timestamppb.New(st.CreatedAt),
+		Friends:   st.Friends,
+	}
+
+	if st.MiddleName.Valid {
+		pbStudent.MiddleName = &st.MiddleName.String
+	}
+
+	if st.Status.Valid {
+		if statusEnum, ok := proto.Student_Status_value[st.Status.String]; ok {
+			pbStudent.Status = proto.Student_Status(statusEnum)
+		}
+	}
+
+	if st.HomeAddress.Valid {
+		parts := strings.SplitN(st.HomeAddress.String, ",", 3)
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("invalid home address %q: expected 'street, city, country'", st.HomeAddress.String)
+		}
+
+		street := strings.TrimSpace(parts[0])
+		city := strings.TrimSpace(parts[1])
+		country := strings.TrimSpace(parts[2])
+
+		pbStudent.HomeAddress.Street = street
+		pbStudent.HomeAddress.City = city
+		pbStudent.HomeAddress.Country = country
+	}
+
+	if st.CourseGrades.Valid {
+		var courseMap map[string]string
+		if err := json.Unmarshal([]byte(st.CourseGrades.String), &courseMap); err == nil {
+			pbStudent.CourseGrades = courseMap
+		}
+	}
+
+	if st.Local.Valid {
+		var local proto.Student_LocalStudent
+		if err := json.Unmarshal([]byte(st.Local.String), &local); err == nil {
+			pbStudent.StudentDetails = &proto.Student_Local{Local: &local}
+		}
+	}
+
+	if st.Exchange.Valid {
+		var exchange proto.Student_ExchangeStudent
+		if err := json.Unmarshal([]byte(st.Exchange.String), &exchange); err == nil {
+			pbStudent.StudentDetails = &proto.Student_Exchange{Exchange: &exchange}
+		}
+	}
+
+	return &proto.GetStudentResponse{Student: pbStudent}, nil
 }
 
 // UpdateStudent handles a gRPC request to update an existing student's data.
@@ -97,11 +173,18 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
 		}
 
 		updated := student.Student{
-			ID:        req.Student.Id,
-			FirstName: req.Student.FirstName,
-			LastName:  req.Student.LastName,
-			Grade:     req.Student.Grade,
-			CreatedAt: existing.CreatedAt,
+			ID:           req.Student.Id,
+			FirstName:    req.Student.FirstName,
+			LastName:     req.Student.LastName,
+			Grade:        req.Student.Grade,
+			CreatedAt:    existing.CreatedAt,
+			MiddleName:   nullStringPtr(req.Student.MiddleName),
+			Status:       nullStringFromEnum(req.Student.Status),
+			HomeAddress:  nullStringFromAddress(req.Student.HomeAddress),
+			CourseGrades: nullStringFromMap(req.Student.CourseGrades),
+			Friends:      req.Student.Friends,
+			Local:        nullStringFromLocal(req.Student.GetLocal()),
+			Exchange:     nullStringFromExchange(req.Student.GetExchange()),
 		}
 
 		return s.repo.Update(txCtx, updated)
@@ -147,14 +230,132 @@ func (s *StudentServer) ListStudents(ctx context.Context, req *proto.ListStudent
 	var result []*proto.Student
 
 	for _, st := range students {
-		result = append(result, &proto.Student{
-			Id:        st.ID,
-			FirstName: st.FirstName,
-			LastName:  st.LastName,
-			Grade:     st.Grade,
-			CreatedAt: timestamppb.New(st.CreatedAt),
-		})
+		pbStudent := &proto.Student{
+			Id:           st.ID,
+			FirstName:    st.FirstName,
+			LastName:     st.LastName,
+			Grade:        st.Grade,
+			CreatedAt:    timestamppb.New(st.CreatedAt),
+			MiddleName:   nullToPtr(st.MiddleName),
+			Status:       parseStatus(st.Status),
+			HomeAddress:  parseAddress(st.HomeAddress),
+			CourseGrades: parseCourseGrades(st.CourseGrades),
+			Friends:      st.Friends,
+		}
+
+		if st.Local.Valid {
+			local := &proto.Student_LocalStudent{}
+			if err := json.Unmarshal([]byte(st.Local.String), local); err == nil {
+				pbStudent.StudentDetails = &proto.Student_Local{Local: local}
+			}
+		} else if st.Exchange.Valid {
+			exchange := &proto.Student_ExchangeStudent{}
+			if err := json.Unmarshal([]byte(st.Exchange.String), exchange); err == nil {
+				pbStudent.StudentDetails = &proto.Student_Exchange{Exchange: exchange}
+			}
+		}
+
+		result = append(result, pbStudent)
 	}
 
 	return &proto.ListStudentsResponse{Students: result}, nil
+}
+
+func nullStringPtr(s *string) sql.NullString {
+	if s == nil || *s == "" {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: *s, Valid: true}
+}
+
+func nullStringFromEnum(s proto.Student_Status) sql.NullString {
+	if s == proto.Student_STATUS_UNSPECIFIED {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: s.String(), Valid: true}
+}
+
+func nullStringFromAddress(addr *proto.Student_Address) sql.NullString {
+	if addr == nil {
+		return sql.NullString{Valid: false}
+	}
+	full := fmt.Sprintf("%s, %s, %s", addr.Street, addr.City, addr.Country)
+	return sql.NullString{String: full, Valid: full != ""}
+}
+
+func nullStringFromMap(m map[string]string) sql.NullString {
+	if len(m) == 0 {
+		return sql.NullString{Valid: false}
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: string(b), Valid: true}
+}
+
+func nullStringFromLocal(local *proto.Student_LocalStudent) sql.NullString {
+	if local == nil {
+		return sql.NullString{Valid: false}
+	}
+	bytes, err := json.Marshal(local)
+	if err != nil {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: string(bytes), Valid: true}
+}
+
+func nullStringFromExchange(exchange *proto.Student_ExchangeStudent) sql.NullString {
+	if exchange == nil {
+		return sql.NullString{Valid: false}
+	}
+	bytes, err := json.Marshal(exchange)
+	if err != nil {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: string(bytes), Valid: true}
+}
+
+func nullToPtr(ns sql.NullString) *string {
+	if ns.Valid {
+		return &ns.String
+	}
+	return nil
+}
+
+func parseStatus(ns sql.NullString) proto.Student_Status {
+	if !ns.Valid {
+		return proto.Student_STATUS_UNSPECIFIED
+	}
+	status, ok := proto.Student_Status_value[ns.String]
+	if !ok {
+		return proto.Student_STATUS_UNSPECIFIED
+	}
+	return proto.Student_Status(status)
+}
+
+func parseAddress(ns sql.NullString) *proto.Student_Address {
+	if !ns.Valid {
+		return nil
+	}
+
+	parts := strings.SplitN(ns.String, ",", 3)
+	if len(parts) != 3 {
+		return &proto.Student_Address{}
+	}
+
+	return &proto.Student_Address{
+		Street:  strings.TrimSpace(parts[0]),
+		City:    strings.TrimSpace(parts[1]),
+		Country: strings.TrimSpace(parts[2]),
+	}
+}
+
+func parseCourseGrades(ns sql.NullString) map[string]string {
+	if !ns.Valid {
+		return nil
+	}
+	var grades map[string]string
+	_ = json.Unmarshal([]byte(ns.String), &grades)
+	return grades
 }

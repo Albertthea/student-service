@@ -6,7 +6,20 @@ import (
 )
 
 // Columns holds the list of all column names in the students table.
-var Columns = [...]string{"id", "first_name", "last_name", "grade", "created_at"}
+var Columns = [...]string{
+	"id",
+	"first_name",
+	"last_name",
+	"grade",
+	"created_at",
+	"middle_name",
+	"status",
+	"home_address",
+	"course_grades",
+	"friends",
+	"local",
+	"exchange",
+}
 
 // ColumnsStr returns a comma-separated string of all columns.
 func ColumnsStr() string {
