@@ -55,23 +55,31 @@ func (s *StudentServer) CreateStudent(ctx context.Context, req *proto.CreateStud
 		Friends:      req.Friends,
 	}
 
-	switch details := req.GetStudentDetails().(type) {
+	details := req.GetStudentDetails()
+	if details == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "student details must be provided")
+	}
+
+	switch d := details.(type) {
+
 	case *proto.CreateStudentRequest_Local:
-		if details.Local != nil {
-			b, err := json.Marshal(details.Local)
+		if d.Local != nil {
+			b, err := json.Marshal(d.Local)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "invalid local data: %v", err)
 			}
 			studentEntity.Local = sql.NullString{String: string(b), Valid: true}
 		}
 	case *proto.CreateStudentRequest_Exchange:
-		if details.Exchange != nil {
-			b, err := json.Marshal(details.Exchange)
+		if d.Exchange != nil {
+			b, err := json.Marshal(d.Exchange)
 			if err != nil {
 				return nil, status.Errorf(codes.InvalidArgument, "invalid exchange data: %v", err)
 			}
 			studentEntity.Exchange = sql.NullString{String: string(b), Valid: true}
 		}
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "unsupported details type: %T", details)
 	}
 
 	err := s.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
@@ -262,7 +270,7 @@ func (s *StudentServer) ListStudents(ctx context.Context, req *proto.ListStudent
 }
 
 func nullStringPtr(s *string) sql.NullString {
-	if s == nil || *s == "" {
+	if s == nil {
 		return sql.NullString{Valid: false}
 	}
 	return sql.NullString{String: *s, Valid: true}
@@ -280,7 +288,7 @@ func nullStringFromAddress(addr *proto.Student_Address) sql.NullString {
 		return sql.NullString{Valid: false}
 	}
 	full := fmt.Sprintf("%s, %s, %s", addr.Street, addr.City, addr.Country)
-	return sql.NullString{String: full, Valid: full != ""}
+	return sql.NullString{String: full, Valid: true}
 }
 
 func nullStringFromMap(m map[string]string) sql.NullString {
