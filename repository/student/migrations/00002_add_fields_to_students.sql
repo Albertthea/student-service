@@ -1,0 +1,17 @@
+-- +goose Up
+ALTER TABLE students ADD COLUMN IF NOT EXISTS middle_name   TEXT;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS status        TEXT;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS home_address  JSONB;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS course_grades JSONB;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS friends       TEXT[];
+ALTER TABLE students ADD COLUMN IF NOT EXISTS local         JSONB;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS exchange      JSONB;
+
+-- +goose Down
+ALTER TABLE students DROP COLUMN IF EXISTS exchange;
+ALTER TABLE students DROP COLUMN IF EXISTS local;
+ALTER TABLE students DROP COLUMN IF EXISTS friends;
+ALTER TABLE students DROP COLUMN IF EXISTS course_grades;
+ALTER TABLE students DROP COLUMN IF EXISTS home_address;
+ALTER TABLE students DROP COLUMN IF EXISTS status;
+ALTER TABLE students DROP COLUMN IF EXISTS middle_name;

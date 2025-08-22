@@ -243,22 +243,10 @@ func (*Student_Local) isStudent_StudentDetails() {}
 func (*Student_Exchange) isStudent_StudentDetails() {}
 
 type CreateStudentRequest struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	FirstName   string                 `protobuf:"bytes,1,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
-	LastName    string                 `protobuf:"bytes,2,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
-	Grade       int32                  `protobuf:"varint,3,opt,name=grade,proto3" json:"grade,omitempty"`
-	MiddleName  *string                `protobuf:"bytes,4,opt,name=middle_name,json=middleName,proto3,oneof" json:"middle_name,omitempty"`
-	Status      Student_Status         `protobuf:"varint,5,opt,name=status,proto3,enum=student.Student_Status" json:"status,omitempty"`
-	HomeAddress *Student_Address       `protobuf:"bytes,6,opt,name=home_address,json=homeAddress,proto3" json:"home_address,omitempty"`
-	// Types that are valid to be assigned to StudentDetails:
-	//
-	//	*CreateStudentRequest_Local
-	//	*CreateStudentRequest_Exchange
-	StudentDetails isCreateStudentRequest_StudentDetails `protobuf_oneof:"student_details"`
-	Friends        []string                              `protobuf:"bytes,9,rep,name=friends,proto3" json:"friends,omitempty"`
-	CourseGrades   map[string]string                     `protobuf:"bytes,10,rep,name=course_grades,json=courseGrades,proto3" json:"course_grades,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Student       *Student               `protobuf:"bytes,1,opt,name=student,proto3" json:"student,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateStudentRequest) Reset() {
@@ -291,102 +279,12 @@ func (*CreateStudentRequest) Descriptor() ([]byte, []int) {
 	return file_student_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *CreateStudentRequest) GetFirstName() string {
+func (x *CreateStudentRequest) GetStudent() *Student {
 	if x != nil {
-		return x.FirstName
-	}
-	return ""
-}
-
-func (x *CreateStudentRequest) GetLastName() string {
-	if x != nil {
-		return x.LastName
-	}
-	return ""
-}
-
-func (x *CreateStudentRequest) GetGrade() int32 {
-	if x != nil {
-		return x.Grade
-	}
-	return 0
-}
-
-func (x *CreateStudentRequest) GetMiddleName() string {
-	if x != nil && x.MiddleName != nil {
-		return *x.MiddleName
-	}
-	return ""
-}
-
-func (x *CreateStudentRequest) GetStatus() Student_Status {
-	if x != nil {
-		return x.Status
-	}
-	return Student_STATUS_UNSPECIFIED
-}
-
-func (x *CreateStudentRequest) GetHomeAddress() *Student_Address {
-	if x != nil {
-		return x.HomeAddress
+		return x.Student
 	}
 	return nil
 }
-
-func (x *CreateStudentRequest) GetStudentDetails() isCreateStudentRequest_StudentDetails {
-	if x != nil {
-		return x.StudentDetails
-	}
-	return nil
-}
-
-func (x *CreateStudentRequest) GetLocal() *Student_LocalStudent {
-	if x != nil {
-		if x, ok := x.StudentDetails.(*CreateStudentRequest_Local); ok {
-			return x.Local
-		}
-	}
-	return nil
-}
-
-func (x *CreateStudentRequest) GetExchange() *Student_ExchangeStudent {
-	if x != nil {
-		if x, ok := x.StudentDetails.(*CreateStudentRequest_Exchange); ok {
-			return x.Exchange
-		}
-	}
-	return nil
-}
-
-func (x *CreateStudentRequest) GetFriends() []string {
-	if x != nil {
-		return x.Friends
-	}
-	return nil
-}
-
-func (x *CreateStudentRequest) GetCourseGrades() map[string]string {
-	if x != nil {
-		return x.CourseGrades
-	}
-	return nil
-}
-
-type isCreateStudentRequest_StudentDetails interface {
-	isCreateStudentRequest_StudentDetails()
-}
-
-type CreateStudentRequest_Local struct {
-	Local *Student_LocalStudent `protobuf:"bytes,7,opt,name=local,proto3,oneof"`
-}
-
-type CreateStudentRequest_Exchange struct {
-	Exchange *Student_ExchangeStudent `protobuf:"bytes,8,opt,name=exchange,proto3,oneof"`
-}
-
-func (*CreateStudentRequest_Local) isCreateStudentRequest_StudentDetails() {}
-
-func (*CreateStudentRequest_Exchange) isCreateStudentRequest_StudentDetails() {}
 
 type CreateStudentResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -923,26 +821,9 @@ const file_student_proto_rawDesc = "" +
 	"\tSUSPENDED\x10\x03\x12\f\n" +
 	"\bEXCHANGE\x10\x04B\x11\n" +
 	"\x0fstudent_detailsB\x0e\n" +
-	"\f_middle_name\"\xc7\x04\n" +
-	"\x14CreateStudentRequest\x12\x1d\n" +
-	"\n" +
-	"first_name\x18\x01 \x01(\tR\tfirstName\x12\x1b\n" +
-	"\tlast_name\x18\x02 \x01(\tR\blastName\x12\x14\n" +
-	"\x05grade\x18\x03 \x01(\x05R\x05grade\x12$\n" +
-	"\vmiddle_name\x18\x04 \x01(\tH\x01R\n" +
-	"middleName\x88\x01\x01\x12/\n" +
-	"\x06status\x18\x05 \x01(\x0e2\x17.student.Student.StatusR\x06status\x12;\n" +
-	"\fhome_address\x18\x06 \x01(\v2\x18.student.Student.AddressR\vhomeAddress\x125\n" +
-	"\x05local\x18\a \x01(\v2\x1d.student.Student.LocalStudentH\x00R\x05local\x12>\n" +
-	"\bexchange\x18\b \x01(\v2 .student.Student.ExchangeStudentH\x00R\bexchange\x12\x18\n" +
-	"\afriends\x18\t \x03(\tR\afriends\x12T\n" +
-	"\rcourse_grades\x18\n" +
-	" \x03(\v2/.student.CreateStudentRequest.CourseGradesEntryR\fcourseGrades\x1a?\n" +
-	"\x11CourseGradesEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x11\n" +
-	"\x0fstudent_detailsB\x0e\n" +
-	"\f_middle_name\"'\n" +
+	"\f_middle_name\"B\n" +
+	"\x14CreateStudentRequest\x12*\n" +
+	"\astudent\x18\x01 \x01(\v2\x10.student.StudentR\astudent\"'\n" +
 	"\x15CreateStudentResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"#\n" +
 	"\x11GetStudentRequest\x12\x0e\n" +
@@ -978,7 +859,7 @@ func file_student_proto_rawDescGZIP() []byte {
 }
 
 var file_student_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_student_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_student_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_student_proto_goTypes = []any{
 	(Student_Status)(0),             // 0: student.Student.Status
 	(*Student)(nil),                 // 1: student.Student
@@ -994,42 +875,37 @@ var file_student_proto_goTypes = []any{
 	(*Student_LocalStudent)(nil),    // 11: student.Student.LocalStudent
 	(*Student_ExchangeStudent)(nil), // 12: student.Student.ExchangeStudent
 	nil,                             // 13: student.Student.CourseGradesEntry
-	nil,                             // 14: student.CreateStudentRequest.CourseGradesEntry
-	(*timestamppb.Timestamp)(nil),   // 15: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),           // 16: google.protobuf.Empty
+	(*timestamppb.Timestamp)(nil),   // 14: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),           // 15: google.protobuf.Empty
 }
 var file_student_proto_depIdxs = []int32{
-	15, // 0: student.Student.created_at:type_name -> google.protobuf.Timestamp
+	14, // 0: student.Student.created_at:type_name -> google.protobuf.Timestamp
 	0,  // 1: student.Student.status:type_name -> student.Student.Status
 	10, // 2: student.Student.home_address:type_name -> student.Student.Address
 	11, // 3: student.Student.local:type_name -> student.Student.LocalStudent
 	12, // 4: student.Student.exchange:type_name -> student.Student.ExchangeStudent
 	13, // 5: student.Student.course_grades:type_name -> student.Student.CourseGradesEntry
-	0,  // 6: student.CreateStudentRequest.status:type_name -> student.Student.Status
-	10, // 7: student.CreateStudentRequest.home_address:type_name -> student.Student.Address
-	11, // 8: student.CreateStudentRequest.local:type_name -> student.Student.LocalStudent
-	12, // 9: student.CreateStudentRequest.exchange:type_name -> student.Student.ExchangeStudent
-	14, // 10: student.CreateStudentRequest.course_grades:type_name -> student.CreateStudentRequest.CourseGradesEntry
-	1,  // 11: student.GetStudentResponse.student:type_name -> student.Student
-	1,  // 12: student.UpdateStudentRequest.student:type_name -> student.Student
-	1,  // 13: student.ListStudentsResponse.students:type_name -> student.Student
-	15, // 14: student.Student.ExchangeStudent.program_start:type_name -> google.protobuf.Timestamp
-	15, // 15: student.Student.ExchangeStudent.program_end:type_name -> google.protobuf.Timestamp
-	2,  // 16: student.StudentService.CreateStudent:input_type -> student.CreateStudentRequest
-	4,  // 17: student.StudentService.GetStudent:input_type -> student.GetStudentRequest
-	6,  // 18: student.StudentService.UpdateStudent:input_type -> student.UpdateStudentRequest
-	7,  // 19: student.StudentService.DeleteStudent:input_type -> student.DeleteStudentRequest
-	8,  // 20: student.StudentService.ListStudents:input_type -> student.ListStudentsRequest
-	3,  // 21: student.StudentService.CreateStudent:output_type -> student.CreateStudentResponse
-	5,  // 22: student.StudentService.GetStudent:output_type -> student.GetStudentResponse
-	16, // 23: student.StudentService.UpdateStudent:output_type -> google.protobuf.Empty
-	16, // 24: student.StudentService.DeleteStudent:output_type -> google.protobuf.Empty
-	9,  // 25: student.StudentService.ListStudents:output_type -> student.ListStudentsResponse
-	21, // [21:26] is the sub-list for method output_type
-	16, // [16:21] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	1,  // 6: student.CreateStudentRequest.student:type_name -> student.Student
+	1,  // 7: student.GetStudentResponse.student:type_name -> student.Student
+	1,  // 8: student.UpdateStudentRequest.student:type_name -> student.Student
+	1,  // 9: student.ListStudentsResponse.students:type_name -> student.Student
+	14, // 10: student.Student.ExchangeStudent.program_start:type_name -> google.protobuf.Timestamp
+	14, // 11: student.Student.ExchangeStudent.program_end:type_name -> google.protobuf.Timestamp
+	2,  // 12: student.StudentService.CreateStudent:input_type -> student.CreateStudentRequest
+	4,  // 13: student.StudentService.GetStudent:input_type -> student.GetStudentRequest
+	6,  // 14: student.StudentService.UpdateStudent:input_type -> student.UpdateStudentRequest
+	7,  // 15: student.StudentService.DeleteStudent:input_type -> student.DeleteStudentRequest
+	8,  // 16: student.StudentService.ListStudents:input_type -> student.ListStudentsRequest
+	3,  // 17: student.StudentService.CreateStudent:output_type -> student.CreateStudentResponse
+	5,  // 18: student.StudentService.GetStudent:output_type -> student.GetStudentResponse
+	15, // 19: student.StudentService.UpdateStudent:output_type -> google.protobuf.Empty
+	15, // 20: student.StudentService.DeleteStudent:output_type -> google.protobuf.Empty
+	9,  // 21: student.StudentService.ListStudents:output_type -> student.ListStudentsResponse
+	17, // [17:22] is the sub-list for method output_type
+	12, // [12:17] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_student_proto_init() }
@@ -1041,17 +917,13 @@ func file_student_proto_init() {
 		(*Student_Local)(nil),
 		(*Student_Exchange)(nil),
 	}
-	file_student_proto_msgTypes[1].OneofWrappers = []any{
-		(*CreateStudentRequest_Local)(nil),
-		(*CreateStudentRequest_Exchange)(nil),
-	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_student_proto_rawDesc), len(file_student_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   14,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

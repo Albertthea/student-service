@@ -56,7 +56,7 @@ Port: 5432
 After the container is up, apply the initial schema:
 
 ```bash
-psql -h localhost -U student -d studentdb -f repository/student/migrations/00000_initial.sql
+psql -h localhost -U student -d studentdb -f repository/student/migrations/00001_initial.sql
 ```
 Password: 111111
 

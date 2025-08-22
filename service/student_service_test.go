@@ -67,10 +67,13 @@ func (s *StudentServiceTestSuite) TestCreateStudent_Success() {
 	ctx := context.Background()
 
 	req := &proto.CreateStudentRequest{
-		FirstName: "Ivan",
-		LastName:  "Petrov",
-		Grade:     9,
+		Student: &proto.Student{
+			FirstName: "Ivan",
+			LastName:  "Petrov",
+			Grade:     9,
+		},
 	}
+
 	createdAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	expectedStudent := student.Student{
 		ID:        "generated-id",
@@ -92,7 +95,13 @@ func (s *StudentServiceTestSuite) TestCreateStudent_Success() {
 
 func (s *StudentServiceTestSuite) TestCreateStudent_DBError() {
 	ctx := context.Background()
-	req := &proto.CreateStudentRequest{FirstName: "Fail", LastName: "Case", Grade: 10}
+	req := &proto.CreateStudentRequest{
+		Student: &proto.Student{
+			FirstName: "Fail",
+			LastName:  "Case",
+			Grade:     10,
+		},
+	}
 
 	s.mockTime.EXPECT().Now().Return(time.Now()).AnyTimes()
 	s.expectTransaction()
