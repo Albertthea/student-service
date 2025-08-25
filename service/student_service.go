@@ -40,14 +40,14 @@ func (s *StudentServer) CreateStudent(ctx context.Context, req *proto.CreateStud
 
 	entity, err := mapper.CreateReqToRepo(id, now, req)
 	if err != nil {
-		return nil, handler.ToStatus(err)
+		return nil, handler.ToStatus(err).Err()
 	}
 
 	if err := s.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
 		_, err := s.repo.Create(txCtx, entity)
 		return err
 	}); err != nil {
-		return nil, handler.ToStatus(err)
+		return nil, handler.ToStatus(err).Err()
 	}
 
 	return &proto.CreateStudentResponse{Id: id}, nil
@@ -58,9 +58,9 @@ func (s *StudentServer) GetStudent(ctx context.Context, req *proto.GetStudentReq
 	st, err := s.repo.GetByID(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, repo.ErrNotFound) {
-			return nil, handler.ToStatus(d.ErrNotFound)
+			return nil, handler.ToStatus(d.ErrNotFound).Err()
 		}
-		return nil, handler.ToStatus(err)
+		return nil, handler.ToStatus(err).Err()
 	}
 	return &proto.GetStudentResponse{Student: mapper.RepoToProto(st)}, nil
 }
@@ -103,7 +103,7 @@ func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStud
 		return s.repo.Update(txCtx, updated)
 	})
 	if err != nil {
-		return nil, handler.ToStatus(err)
+		return nil, handler.ToStatus(err).Err()
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -120,7 +120,7 @@ func (s *StudentServer) DeleteStudent(ctx context.Context, req *proto.DeleteStud
 		return nil
 	})
 	if err != nil {
-		return nil, handler.ToStatus(err)
+		return nil, handler.ToStatus(err).Err()
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -129,7 +129,7 @@ func (s *StudentServer) DeleteStudent(ctx context.Context, req *proto.DeleteStud
 func (s *StudentServer) ListStudents(ctx context.Context, req *proto.ListStudentsRequest) (*proto.ListStudentsResponse, error) {
 	items, err := s.repo.ListByGrade(ctx, req.Grade)
 	if err != nil {
-		return nil, handler.ToStatus(err)
+		return nil, handler.ToStatus(err).Err()
 	}
 	out := make([]*proto.Student, 0, len(items))
 	for i := range items {
