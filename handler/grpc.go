@@ -15,24 +15,24 @@ func Register(s *grpc.Server, srv proto.StudentServiceServer) {
 }
 
 // ToStatus converts a domain/service error into a gRPC status error.
-func ToStatus(err error) error {
+func ToStatus(err error) *status.Status {
 	if err == nil {
 		return nil
 	}
 	if st, ok := status.FromError(err); ok {
-		return st.Err()
+		return st
 	}
 
 	switch err {
 	case d.ErrNotFound:
-		return status.Error(codes.NotFound, err.Error())
+		return status.New(codes.NotFound, err.Error())
 	case d.ErrCreatedAtImmutable:
-		return status.Error(codes.InvalidArgument, err.Error())
+		return status.New(codes.InvalidArgument, err.Error())
 	case d.ErrGradeDecrease:
-		return status.Error(codes.FailedPrecondition, err.Error())
+		return status.New(codes.FailedPrecondition, err.Error())
 	case d.ErrDetailsRequired:
-		return status.Error(codes.InvalidArgument, err.Error())
+		return status.New(codes.InvalidArgument, err.Error())
 	default:
-		return status.Error(codes.Internal, err.Error())
+		return status.New(codes.Internal, err.Error())
 	}
 }
