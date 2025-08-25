@@ -8,6 +8,9 @@ var (
 	// ErrNotFound is returned when a student record cannot be found.
 	ErrNotFound = errors.New("student not found")
 
+	// ErrAlreadyExists is returned when trying to create a student that already exists.
+	ErrAlreadyExists = errors.New("student already exists")
+
 	// ErrCreatedAtImmutable is returned when trying to modify the immutable CreatedAt field.
 	ErrCreatedAtImmutable = errors.New("created_at field cannot be modified")
 
@@ -16,4 +19,7 @@ var (
 
 	// ErrDetailsRequired is returned when creating a student without specifying details.
 	ErrDetailsRequired = errors.New("student details must be provided")
+
+	// ErrInvalidArgument is a generic validation error for invalid arguments.
+	ErrInvalidArgument = errors.New("invalid argument")
 )
