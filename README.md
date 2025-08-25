@@ -57,6 +57,7 @@ After the container is up, apply the initial schema:
 
 ```bash
 psql -h localhost -U student -d studentdb -f repository/student/migrations/00001_initial.sql
+psql -h localhost -U student -d studentdb -f repository/student/migrations/00002_add_fields_to_students.sql
 ```
 Password: 111111
 
