@@ -1,4 +1,3 @@
-// Package handler contains gRPC server registration and error translation helpers.
 package handler
 
 import (
@@ -26,12 +25,12 @@ func ToStatus(err error) *status.Status {
 	switch err {
 	case d.ErrNotFound:
 		return status.New(codes.NotFound, err.Error())
-	case d.ErrCreatedAtImmutable:
+	case d.ErrAlreadyExists:
+		return status.New(codes.AlreadyExists, err.Error())
+	case d.ErrInvalidArgument, d.ErrCreatedAtImmutable, d.ErrDetailsRequired:
 		return status.New(codes.InvalidArgument, err.Error())
 	case d.ErrGradeDecrease:
 		return status.New(codes.FailedPrecondition, err.Error())
-	case d.ErrDetailsRequired:
-		return status.New(codes.InvalidArgument, err.Error())
 	default:
 		return status.New(codes.Internal, err.Error())
 	}
