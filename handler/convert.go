@@ -1,3 +1,5 @@
+// Package handler provides gRPC handlers and helpers for converting between
+// proto-generated types and domain models.
 package handler
 
 import (
@@ -109,8 +111,7 @@ func domainExchangeToProto(e *d.ExchangeStudent) *pb.Student_ExchangeStudent {
 	}
 }
 
-// --- Student ---
-
+// ProtoToDomainStudent converts a proto Student message into a domain Student entity.
 func ProtoToDomainStudent(p *pb.Student) d.Student {
 	if p == nil {
 		return d.Student{}
@@ -153,6 +154,7 @@ func ProtoToDomainStudent(p *pb.Student) d.Student {
 	}
 }
 
+// DomainToProtoStudent converts a domain Student entity into a proto Student message.
 func DomainToProtoStudent(s d.Student) *pb.Student {
 	out := &pb.Student{
 		Id:          s.ID,
