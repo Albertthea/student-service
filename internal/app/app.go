@@ -1,4 +1,4 @@
-// Package app contains the implementation for running and configuring the student-service application.
+// Package app wires config, DB, tx-manager, domain service and gRPC handler together.
 package app
 
 import (
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,99 +14,83 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"example.com/student-service/handler"
 	"example.com/student-service/internal/config"
 	"example.com/student-service/internal/txmanager"
-	"example.com/student-service/proto"
+	pb "example.com/student-service/proto"
 	"example.com/student-service/repository/student"
 	"example.com/student-service/service"
 )
 
-// App represents the gRPC server and listener for the student-service.
+// App holds the gRPC server and listener.
 type App struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 }
 
-// realTimeProvider implements the TimeProvider interface, returning the current time.
+// realTimeProvider implements service.TimeProvider.
 type realTimeProvider struct{}
 
-// Now returns the current local time.
-func (realTimeProvider) Now() time.Time {
-	return time.Now()
-}
+// Now returns current time.
+func (realTimeProvider) Now() time.Time { return time.Now() }
 
-// realIDGenerator implements the IDGenerator interface, generating UUIDs.
+// realIDGenerator implements service.IDGenerator.
 type realIDGenerator struct{}
 
-// GenerateID generates a new UUID string.
-func (realIDGenerator) GenerateID() string {
-	return uuid.New().String()
-}
+// GenerateID returns a new UUID string.
+func (realIDGenerator) GenerateID() string { return uuid.New().String() }
 
-// NewApp creates a new App instance using the provided configuration.
+// NewApp constructs a configured gRPC server instance.
 func NewApp(cfg *config.Config) (*App, error) {
-	dbLogin := os.Getenv(cfg.PostgreSQL.Authorisation.Env.LoginEnv)
-	dbPassword := os.Getenv(cfg.PostgreSQL.Authorisation.Env.PasswordEnv)
-
-	if dbLogin == "" || dbPassword == "" {
-		return nil, fmt.Errorf("missing DB credentials in env variables: %s, %s",
-			cfg.PostgreSQL.Authorisation.Env.LoginEnv,
-			cfg.PostgreSQL.Authorisation.Env.PasswordEnv)
-	}
-
-	dsn := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=studentdb sslmode=disable",
-		cfg.PostgreSQL.Host,
-		cfg.PostgreSQL.Port,
-		dbLogin,
-		dbPassword,
-	)
-
+	// Подключение к БД: DSN формируется конфигом.
+	dsn := cfg.BuildPostgresDSN()
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to DB: %w", err)
+		return nil, fmt.Errorf("connect DB: %w", err)
 	}
 
+	// Инфраструктура.
 	repo := student.NewRepository(db)
-	timeProvider := realTimeProvider{}
+	txMgr := txmanager.NewManager(db)
+	timeProv := realTimeProvider{}
 	idGen := realIDGenerator{}
-	txManager := txmanager.NewManager(db)
 
-	server := service.NewStudentServer(repo, timeProvider, txManager, idGen)
+	// Доменный сервис (domain-модели на вход/выход).
+	svc := service.New(newRepoAdapter(repo), txMgr, timeProv, idGen)
+
+	// gRPC сервер и handler (вся proto<->domain конвертация живёт в handler).
 	grpcServer := grpc.NewServer()
-	proto.RegisterStudentServiceServer(grpcServer, server)
-	reflection.Register(grpcServer)
+	pb.RegisterStudentServiceServer(grpcServer, handler.NewStudentServer(svc))
 
-	listenAddress := fmt.Sprintf(":%d", cfg.Server.Port)
-	listener, err := net.Listen("tcp", listenAddress)
-	if err != nil {
-		return nil, fmt.Errorf("failed to listen on %s: %w", listenAddress, err)
+	// Reflection включаем только если задано в конфиге.
+	if cfg.GRPC.EnableReflection {
+		reflection.Register(grpcServer)
 	}
 
-	log.Printf("gRPC server will start on %s", listenAddress)
+	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("listen %s: %w", addr, err)
+	}
+	log.Printf("gRPC server will start on %s", addr)
 
-	return &App{
-		grpcServer: grpcServer,
-		listener:   listener,
-	}, nil
+	return &App{grpcServer: grpcServer, listener: lis}, nil
 }
 
-// Run starts the gRPC server and listens for incoming connections.
+// Run starts the gRPC server and stops it gracefully on context cancel.
 func (a *App) Run(ctx context.Context) error {
 	errCh := make(chan error, 1)
-
 	go func() {
 		if err := a.grpcServer.Serve(a.listener); err != nil {
 			errCh <- err
 		}
 	}()
-
 	select {
 	case <-ctx.Done():
-		log.Println("Context cancelled: shutting down gRPC server gracefully...")
+		log.Println("context cancelled: graceful stop")
 		a.grpcServer.GracefulStop()
 		return nil
 	case err := <-errCh:
-		return fmt.Errorf("gRPC server failed: %w", err)
+		return fmt.Errorf("grpc serve: %w", err)
 	}
 }

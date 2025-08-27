@@ -1,3 +1,4 @@
+// Package service_test contains tests for the student service business logic.
 package service_test
 
 import (
@@ -6,26 +7,19 @@ import (
 	"testing"
 	"time"
 
-	"example.com/student-service/proto"
-	"example.com/student-service/repository/student"
+	d "example.com/student-service/domain"
 	"example.com/student-service/service"
 	"example.com/student-service/service/mocks"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/golang/mock/gomock"
-	_ "github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
 type fixedIDGenerator struct{}
 
-func (f fixedIDGenerator) GenerateID() string {
-	return "generated-id"
-}
+func (f fixedIDGenerator) GenerateID() string { return "generated-id" }
 
-// StudentServiceTestSuite defines the test suite structure
 type StudentServiceTestSuite struct {
 	suite.Suite
 
@@ -33,319 +27,281 @@ type StudentServiceTestSuite struct {
 	mockRepo *mocks.MockRepository
 	mockTime *mocks.MockTimeProvider
 	mockTx   *mocks.MockTxManager
-	server   *service.StudentServer
+	svc      *service.Service
 }
 
 func (s *StudentServiceTestSuite) SetupTest() {
 	s.ctrl = gomock.NewController(s.T())
-
 	s.mockRepo = mocks.NewMockRepository(s.ctrl)
 	s.mockTime = mocks.NewMockTimeProvider(s.ctrl)
 	s.mockTx = mocks.NewMockTxManager(s.ctrl)
-
-	idGen := fixedIDGenerator{}
-	s.server = service.NewStudentServer(s.mockRepo, s.mockTime, s.mockTx, idGen)
-}
-
-func (s *StudentServiceTestSuite) TestSanity() {
-	require.NotNil(s.T(), s.server, "StudentServer should be initialized in SetupTest")
+	s.svc = service.New(s.mockRepo, s.mockTx, s.mockTime, fixedIDGenerator{})
 }
 
 func (s *StudentServiceTestSuite) TearDownTest() {
 	s.ctrl.Finish()
 }
 
-func (s *StudentServiceTestSuite) expectTransaction() {
-	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
+func (s *StudentServiceTestSuite) expectTx() {
+	s.mockTx.EXPECT().WithTransaction(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
-		},
-	)
+		})
 }
 
-func (s *StudentServiceTestSuite) TestCreateStudent_Success() {
-	ctx := context.Background()
+func (s *StudentServiceTestSuite) TestSanity() {
+	require.NotNil(s.T(), s.svc)
+}
 
-	req := &proto.CreateStudentRequest{
-		Student: &proto.Student{
-			FirstName: "Ivan",
-			LastName:  "Petrov",
-			Grade:     9,
-		},
-	}
+// --- Create ---
 
-	createdAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	expectedStudent := student.Student{
-		ID:        "generated-id",
+func (s *StudentServiceTestSuite) TestCreate_Success() {
+	now := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	in := d.Student{
 		FirstName: "Ivan",
 		LastName:  "Petrov",
 		Grade:     9,
-		CreatedAt: createdAt,
+		Status:    d.StatusActive, // важно: валидный статус
+		Details:   d.Details{Local: &d.LocalStudent{NationalID: "NID", Scholarship: true}},
 	}
 
-	s.mockTime.EXPECT().Now().Return(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
-	s.expectTransaction()
-	s.mockRepo.EXPECT().Create(ctx, gomock.Eq(expectedStudent)).Return("generated-id", nil)
+	s.mockTime.EXPECT().Now().Return(now)
+	s.expectTx()
+	s.mockRepo.EXPECT().
+		Create(gomock.Any(), gomock.AssignableToTypeOf(d.Student{})).
+		DoAndReturn(func(_ context.Context, got d.Student) (string, error) {
+			require.Equal(s.T(), "generated-id", got.ID)
+			require.Equal(s.T(), "Ivan", got.FirstName)
+			require.Equal(s.T(), "Petrov", got.LastName)
+			require.EqualValues(s.T(), 9, got.Grade)
+			require.Equal(s.T(), d.StatusActive, got.Status)
+			require.WithinDuration(s.T(), now, got.CreatedAt, time.Microsecond)
+			require.NotNil(s.T(), got.Details.Local)
+			require.Equal(s.T(), "NID", got.Details.Local.NationalID)
+			return "generated-id", nil
+		})
 
-	resp, err := s.server.CreateStudent(ctx, req)
-
+	id, err := s.svc.Create(context.Background(), in)
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), "generated-id", resp.GetId())
+	require.Equal(s.T(), "generated-id", id)
 }
 
-func (s *StudentServiceTestSuite) TestCreateStudent_DBError() {
-	ctx := context.Background()
-	req := &proto.CreateStudentRequest{
-		Student: &proto.Student{
-			FirstName: "Fail",
-			LastName:  "Case",
-			Grade:     10,
-		},
+func (s *StudentServiceTestSuite) TestCreate_DBError() {
+	now := time.Now().UTC()
+
+	in := d.Student{
+		FirstName: "Fail",
+		LastName:  "Case",
+		Grade:     10,
+		Status:    d.StatusActive, // важно
+		Details:   d.Details{Local: &d.LocalStudent{NationalID: "X"}},
 	}
 
-	s.mockTime.EXPECT().Now().Return(time.Now()).AnyTimes()
-	s.expectTransaction()
-	s.mockRepo.EXPECT().Create(ctx, gomock.Any()).Return("", errors.New("db error"))
+	s.mockTime.EXPECT().Now().Return(now)
+	s.expectTx()
+	s.mockRepo.EXPECT().
+		Create(gomock.Any(), gomock.Any()).
+		Return("", errors.New("db error"))
 
-	_, err := s.server.CreateStudent(ctx, req)
+	_, err := s.svc.Create(context.Background(), in)
 	require.Error(s.T(), err)
-	st, ok := status.FromError(err)
-	require.True(s.T(), ok)
-	require.Equal(s.T(), codes.Internal, st.Code())
 }
 
-func (s *StudentServiceTestSuite) TestGetStudent_Success() {
-	id := "student-id"
-	expectedTime := time.Now()
+// --- Get ---
 
-	s.mockRepo.EXPECT().GetByID(gomock.Any(), id).Return(&student.Student{
+func (s *StudentServiceTestSuite) TestGet_Success() {
+	id := "student-id"
+	created := time.Now().UTC()
+
+	s.mockRepo.EXPECT().GetByID(gomock.Any(), id).Return(&d.Student{
 		ID:        id,
 		FirstName: "Alice",
 		LastName:  "Smith",
 		Grade:     9,
-		CreatedAt: expectedTime,
+		Status:    d.StatusActive,
+		CreatedAt: created,
 	}, nil)
 
-	resp, err := s.server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: id})
+	got, err := s.svc.Get(context.Background(), id)
 	require.NoError(s.T(), err)
-	require.Equal(s.T(), id, resp.Student.Id)
-	require.Equal(s.T(), "Alice", resp.Student.FirstName)
-	require.Equal(s.T(), "Smith", resp.Student.LastName)
-	require.Equal(s.T(), int32(9), resp.Student.Grade)
-	require.WithinDuration(s.T(), expectedTime, resp.Student.CreatedAt.AsTime(), time.Second)
+	require.Equal(s.T(), id, got.ID)
+	require.Equal(s.T(), "Alice", got.FirstName)
+	require.Equal(s.T(), "Smith", got.LastName)
+	require.EqualValues(s.T(), 9, got.Grade)
+	require.Equal(s.T(), d.StatusActive, got.Status)
+	require.WithinDuration(s.T(), created, got.CreatedAt, time.Second)
 }
 
-func (s *StudentServiceTestSuite) TestGetStudent_NotFound() {
-	studentID := "non-existent-id"
+func (s *StudentServiceTestSuite) TestGet_NotFound() {
+	id := "nope"
 
-	s.mockRepo.EXPECT().
-		GetByID(gomock.Any(), studentID).
-		Return(nil, student.ErrNotFound)
+	s.mockRepo.EXPECT().GetByID(gomock.Any(), id).Return(nil, d.ErrNotFound)
+	_, err := s.svc.Get(context.Background(), id)
+	require.ErrorIs(s.T(), err, d.ErrNotFound)
+}
 
-	_, err := s.server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
+func (s *StudentServiceTestSuite) TestGet_DBError() {
+	id := "oops"
 
+	s.mockRepo.EXPECT().GetByID(gomock.Any(), id).Return(nil, errors.New("db error"))
+	_, err := s.svc.Get(context.Background(), id)
 	require.Error(s.T(), err)
-
-	st, ok := status.FromError(err)
-	require.True(s.T(), ok)
-	require.Equal(s.T(), codes.NotFound, st.Code())
 }
 
-func (s *StudentServiceTestSuite) TestGetStudent_DBError() {
-	studentID := "some-id"
+// --- Update ---
 
-	s.mockTime.EXPECT().Now().Return(time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)).AnyTimes()
-	s.mockRepo.EXPECT().
-		GetByID(gomock.Any(), studentID).
-		Return(nil, errors.New("db error"))
+func (s *StudentServiceTestSuite) TestUpdate_Success() {
+	t0 := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 
-	_, err := s.server.GetStudent(context.Background(), &proto.GetStudentRequest{Id: studentID})
-
-	require.Error(s.T(), err)
-
-	st, ok := status.FromError(err)
-	require.True(s.T(), ok)
-	require.Equal(s.T(), codes.Internal, st.Code())
-}
-
-func (s *StudentServiceTestSuite) TestUpdateStudent_Success() {
-	ctx := context.Background()
-
-	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-
-	s.expectTransaction()
-
-	existingStudent := &student.Student{
+	current := &d.Student{
 		ID:        "some-id",
 		FirstName: "Dobby",
 		LastName:  "Surname",
 		Grade:     9,
-		CreatedAt: fixedTime,
+		Status:    d.StatusActive, // важно
+		CreatedAt: t0,
+		Details:   d.Details{Local: &d.LocalStudent{NationalID: "NID"}},
 	}
-	updatedStudent := student.Student{
-		ID:        "some-id",
-		FirstName: "John",
-		LastName:  "Doe",
-		Grade:     10,
-		CreatedAt: fixedTime,
-	}
-
-	s.mockRepo.EXPECT().GetByID(gomock.Any(), "some-id").Return(existingStudent, nil)
-	s.mockRepo.EXPECT().Update(gomock.Any(), gomock.Eq(updatedStudent)).Return(nil)
-
-	req := &proto.UpdateStudentRequest{
-		Student: &proto.Student{
-			Id:        "some-id",
-			FirstName: "John",
-			LastName:  "Doe",
-			Grade:     10,
-		},
+	upd := d.Student{
+		ID:      "some-id",
+		Grade:   10,
+		Status:  d.StatusActive, // важно
+		Details: d.Details{Local: &d.LocalStudent{NationalID: "NID"}},
 	}
 
-	_, err := s.server.UpdateStudent(ctx, req)
-	require.NoError(s.T(), err)
-}
-
-func (s *StudentServiceTestSuite) TestUpdateStudent_GradeDecrease_ShouldFail() {
-	ctx := context.Background()
-	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-
-	existingStudent := &student.Student{
-		ID:        "some-id",
-		FirstName: "Dobby",
-		LastName:  "Surname",
-		Grade:     10,
-		CreatedAt: fixedTime,
-	}
-
-	s.expectTransaction()
-	s.mockRepo.EXPECT().GetByID(gomock.Any(), "some-id").Return(existingStudent, nil)
-
-	req := &proto.UpdateStudentRequest{
-		Student: &proto.Student{
-			Id:        "some-id",
-			FirstName: "Dobby",
-			LastName:  "Surname",
-			Grade:     9, // downgrade!
-		},
-	}
-
-	_, err := s.server.UpdateStudent(ctx, req)
-	require.Error(s.T(), err)
-
-	st, ok := status.FromError(err)
-	require.True(s.T(), ok)
-	require.Equal(s.T(), codes.FailedPrecondition, st.Code())
-}
-
-func (s *StudentServiceTestSuite) TestUpdateStudent_DBError() {
-	ctx := context.Background()
-
-	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-
-	s.expectTransaction()
-
+	s.expectTx()
+	s.mockRepo.EXPECT().GetByID(gomock.Any(), "some-id").Return(current, nil)
 	s.mockRepo.EXPECT().
-		GetByID(gomock.Any(), "some-id").
-		Return(&student.Student{
-			ID:        "some-id",
-			FirstName: "Dobby",
-			LastName:  "Surname",
-			Grade:     9,
-			CreatedAt: fixedTime,
-		}, nil)
+		Update(gomock.Any(), gomock.AssignableToTypeOf(d.Student{})).
+		DoAndReturn(func(_ context.Context, got d.Student) error {
+			require.Equal(s.T(), "some-id", got.ID)
+			require.EqualValues(s.T(), 10, got.Grade)
+			require.Equal(s.T(), d.StatusActive, got.Status)
+			// сервис должен подставить CreatedAt из current
+			require.WithinDuration(s.T(), t0, got.CreatedAt, time.Second)
+			// details должны сохраниться/быть валидными
+			require.NotNil(s.T(), got.Details.Local)
+			require.Equal(s.T(), "NID", got.Details.Local.NationalID)
+			return nil
+		})
 
-	s.mockRepo.EXPECT().Update(gomock.Any(), gomock.Any()).Return(errors.New("db error"))
+	err := s.svc.Update(context.Background(), upd)
+	require.NoError(s.T(), err)
+}
 
-	req := &proto.UpdateStudentRequest{
-		Student: &proto.Student{
-			Id:        "some-id",
-			FirstName: "John",
-			LastName:  "Doe",
-			Grade:     10,
-		},
+func (s *StudentServiceTestSuite) TestUpdate_GradeDecrease() {
+	t0 := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
+
+	current := &d.Student{
+		ID:        "some-id",
+		Grade:     10,
+		Status:    d.StatusActive,
+		CreatedAt: t0,
+		Details:   d.Details{Local: &d.LocalStudent{NationalID: "NID"}},
+	}
+	upd := d.Student{
+		ID:      "some-id",
+		Grade:   9, // downgrade → ошибка
+		Status:  d.StatusActive,
+		Details: d.Details{Local: &d.LocalStudent{NationalID: "NID"}},
 	}
 
-	_, err := s.server.UpdateStudent(ctx, req)
+	s.expectTx()
+	s.mockRepo.EXPECT().GetByID(gomock.Any(), "some-id").Return(current, nil)
 
-	require.Error(s.T(), err)
-
-	st, ok := status.FromError(err)
-	require.True(s.T(), ok)
-	require.Equal(s.T(), codes.Internal, st.Code())
+	err := s.svc.Update(context.Background(), upd)
+	require.ErrorIs(s.T(), err, d.ErrGradeDecrease)
 }
 
-func (s *StudentServiceTestSuite) TestDeleteStudent_Success() {
-	ctx := context.Background()
-	studentID := "some-id"
-	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
+func (s *StudentServiceTestSuite) TestUpdate_DBError() {
+	t0 := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
 
-	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-	s.expectTransaction()
-	s.mockRepo.EXPECT().Delete(gomock.Any(), studentID).Return(nil)
-
-	_, err := s.server.DeleteStudent(ctx, &proto.DeleteStudentRequest{Id: studentID})
-	require.NoError(s.T(), err)
-}
-
-func (s *StudentServiceTestSuite) TestDeleteStudent_DBError() {
-	ctx := context.Background()
-	studentID := "some-id"
-	fixedTime := time.Date(2025, 7, 7, 12, 0, 0, 0, time.UTC)
-
-	s.mockTime.EXPECT().Now().Return(fixedTime).AnyTimes()
-	s.expectTransaction()
-	s.mockRepo.EXPECT().Delete(gomock.Any(), studentID).Return(errors.New("db error"))
-
-	_, err := s.server.DeleteStudent(ctx, &proto.DeleteStudentRequest{Id: studentID})
-	require.Error(s.T(), err)
-
-	st, ok := status.FromError(err)
-	require.True(s.T(), ok)
-	require.Equal(s.T(), codes.Internal, st.Code())
-}
-
-func (s *StudentServiceTestSuite) TestListStudents_Success() {
-	ctx := context.Background()
-	grade := int32(10)
-	students := []student.Student{
-		{ID: "1", FirstName: "John", LastName: "Doe", Grade: 10},
-		{ID: "2", FirstName: "Alice", LastName: "Smith", Grade: 10},
+	current := &d.Student{
+		ID:        "some-id",
+		Grade:     9,
+		Status:    d.StatusActive,
+		CreatedAt: t0,
+		Details:   d.Details{Local: &d.LocalStudent{NationalID: "NID"}},
+	}
+	upd := d.Student{
+		ID:      "some-id",
+		Grade:   10,
+		Status:  d.StatusActive,
+		Details: d.Details{Local: &d.LocalStudent{NationalID: "NID"}},
 	}
 
-	s.mockRepo.EXPECT().ListByGrade(gomock.Any(), grade).Return(students, nil)
+	s.expectTx()
+	s.mockRepo.EXPECT().GetByID(gomock.Any(), "some-id").Return(current, nil)
+	s.mockRepo.EXPECT().
+		Update(gomock.Any(), gomock.AssignableToTypeOf(d.Student{})).
+		Return(errors.New("db error"))
 
-	resp, err := s.server.ListStudents(ctx, &proto.ListStudentsRequest{Grade: grade})
-	require.NoError(s.T(), err)
-	require.Len(s.T(), resp.Students, len(students))
+	err := s.svc.Update(context.Background(), upd)
+	require.Error(s.T(), err)
 }
 
-func (s *StudentServiceTestSuite) TestListStudents_EmptyList() {
-	ctx := context.Background()
+// --- Delete ---
+
+func (s *StudentServiceTestSuite) TestDelete_Success() {
+	id := "some-id"
+
+	s.expectTx()
+	s.mockRepo.EXPECT().Delete(gomock.Any(), id).Return(nil)
+
+	err := s.svc.Delete(context.Background(), id)
+	require.NoError(s.T(), err)
+}
+
+func (s *StudentServiceTestSuite) TestDelete_DBError() {
+	id := "some-id"
+
+	s.expectTx()
+	s.mockRepo.EXPECT().Delete(gomock.Any(), id).Return(errors.New("db error"))
+
+	err := s.svc.Delete(context.Background(), id)
+	require.Error(s.T(), err)
+}
+
+// --- List / ListByGrade ---
+
+func (s *StudentServiceTestSuite) TestListByGrade_Success() {
+	grade := int32(10)
+	items := []d.Student{
+		{ID: "1", FirstName: "John", LastName: "Doe", Grade: 10, Status: d.StatusActive},
+		{ID: "2", FirstName: "Alice", LastName: "Smith", Grade: 10, Status: d.StatusActive},
+	}
+
+	s.mockRepo.EXPECT().ListByGrade(gomock.Any(), grade).Return(items, nil)
+	got, err := s.svc.ListByGrade(context.Background(), grade)
+	require.NoError(s.T(), err)
+	require.Len(s.T(), got, len(items))
+}
+
+func (s *StudentServiceTestSuite) TestListByGrade_Empty() {
 	grade := int32(10)
 
-	s.mockRepo.EXPECT().ListByGrade(gomock.Any(), grade).Return([]student.Student{}, nil)
-
-	resp, err := s.server.ListStudents(ctx, &proto.ListStudentsRequest{Grade: grade})
+	s.mockRepo.EXPECT().ListByGrade(gomock.Any(), grade).Return([]d.Student{}, nil)
+	got, err := s.svc.ListByGrade(context.Background(), grade)
 	require.NoError(s.T(), err)
-	require.Empty(s.T(), resp.Students)
+	require.Empty(s.T(), got)
 }
 
-func (s *StudentServiceTestSuite) TestListStudents_DBError() {
-	ctx := context.Background()
+func (s *StudentServiceTestSuite) TestListByGrade_DBError() {
 	grade := int32(10)
 
 	s.mockRepo.EXPECT().ListByGrade(gomock.Any(), grade).Return(nil, errors.New("db error"))
-
-	_, err := s.server.ListStudents(ctx, &proto.ListStudentsRequest{Grade: grade})
+	_, err := s.svc.ListByGrade(context.Background(), grade)
 	require.Error(s.T(), err)
+}
 
-	st, ok := status.FromError(err)
-	require.True(s.T(), ok)
-	require.Equal(s.T(), codes.Internal, st.Code())
+func (s *StudentServiceTestSuite) TestList_All() {
+	items := []d.Student{{ID: "1", FirstName: "Ann", LastName: "Lee", Grade: 7, Status: d.StatusActive}}
+
+	s.mockRepo.EXPECT().List(gomock.Any()).Return(items, nil)
+	got, err := s.svc.List(context.Background())
+	require.NoError(s.T(), err)
+	require.Len(s.T(), got, 1)
 }
 
 func TestStudentServiceTestSuite(t *testing.T) {

@@ -1,139 +1,96 @@
-// Package service implements the student gRPC service logic.
+// Package service implements domain-level student use cases.
 package service
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	d "example.com/student-service/domain"
-	"example.com/student-service/handler"
-	"example.com/student-service/mapper"
-	"example.com/student-service/proto"
-	repo "example.com/student-service/repository/student"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// StudentServer implements the StudentServiceServer gRPC interface.
-type StudentServer struct {
-	proto.UnimplementedStudentServiceServer
+// Service implements business logic for students (no proto/gRPC).
+type Service struct {
 	repo         Repository
+	tx           TxManager
 	timeProvider TimeProvider
-	txManager    TxManager
-	idGenerator  IDGenerator
+	idGen        IDGenerator
 }
 
-// NewStudentServer creates a new instance of StudentServer.
-func NewStudentServer(repo Repository, timeProvider TimeProvider, txManager TxManager, idGen IDGenerator) *StudentServer {
-	return &StudentServer{
-		repo:         repo,
-		timeProvider: timeProvider,
-		txManager:    txManager,
-		idGenerator:  idGen,
-	}
+// New creates a new Service.
+func New(repo Repository, tx TxManager, tp TimeProvider, idg IDGenerator) *Service {
+	return &Service{repo: repo, tx: tx, timeProvider: tp, idGen: idg}
 }
 
-// CreateStudent handles a gRPC request to create a new student.
-func (s *StudentServer) CreateStudent(ctx context.Context, req *proto.CreateStudentRequest) (*proto.CreateStudentResponse, error) {
-	id := s.idGenerator.GenerateID()
-	now := s.timeProvider.Now()
-
-	entity, err := mapper.CreateReqToRepo(id, now, req)
-	if err != nil {
-		return nil, handler.ToStatus(err).Err()
+// Create stores a new student in the repository.
+func (s *Service) Create(ctx context.Context, st d.Student) (string, error) {
+	if st.ID == "" {
+		st.ID = s.idGen.GenerateID()
 	}
-
-	if err := s.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
-		_, err := s.repo.Create(txCtx, entity)
+	if st.CreatedAt.IsZero() {
+		st.CreatedAt = s.timeProvider.Now().UTC().Truncate(time.Microsecond)
+	}
+	if err := st.ValidateCreate(); err != nil {
+		return "", err
+	}
+	var id string
+	if err := s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
+		var err error
+		id, err = s.repo.Create(txCtx, st)
 		return err
 	}); err != nil {
-		return nil, handler.ToStatus(err).Err()
+		return "", err
 	}
-
-	return &proto.CreateStudentResponse{Id: id}, nil
+	return id, nil
 }
 
-// GetStudent handles a gRPC request to retrieve a student by ID.
-func (s *StudentServer) GetStudent(ctx context.Context, req *proto.GetStudentRequest) (*proto.GetStudentResponse, error) {
-	st, err := s.repo.GetByID(ctx, req.Id)
-	if err != nil {
-		if errors.Is(err, repo.ErrNotFound) {
-			return nil, handler.ToStatus(d.ErrNotFound).Err()
-		}
-		return nil, handler.ToStatus(err).Err()
+// Get retrieves a student by ID from the repository.
+func (s *Service) Get(ctx context.Context, id string) (*d.Student, error) {
+	if id == "" {
+		return nil, fmt.Errorf("%w: id is required", d.ErrInvalidArgument)
 	}
-	return &proto.GetStudentResponse{Student: mapper.RepoToProto(st)}, nil
+	return s.repo.GetByID(ctx, id)
 }
 
-// UpdateStudent handles a gRPC request to update an existing student's data.
-func (s *StudentServer) UpdateStudent(ctx context.Context, req *proto.UpdateStudentRequest) (*emptypb.Empty, error) {
-	err := s.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
-		current, err := s.repo.GetByID(txCtx, req.GetStudent().GetId())
-		if err != nil {
-			if errors.Is(err, repo.ErrNotFound) {
-				return d.ErrNotFound
-			}
-			return err
-		}
-
-		curDom := d.Student{
-			ID:        current.ID,
-			Grade:     current.Grade,
-			CreatedAt: current.CreatedAt,
-		}
-		var newCreatedAt time.Time
-		if ts := req.GetStudent().GetCreatedAt(); ts != nil {
-			newCreatedAt = ts.AsTime()
-		} else {
-			newCreatedAt = current.CreatedAt
-		}
-		newDom := d.Student{
-			ID:        req.GetStudent().GetId(),
-			Grade:     req.GetStudent().GetGrade(),
-			CreatedAt: newCreatedAt,
-		}
-		if err := curDom.CanUpdate(newDom); err != nil {
-			return err
-		}
-
-		updated, err := mapper.UpdateReqToRepo(current, req)
+// Update modifies an existing student in the repository.
+func (s *Service) Update(ctx context.Context, upd d.Student) error {
+	if upd.ID == "" {
+		return fmt.Errorf("%w: id is required", d.ErrInvalidArgument)
+	}
+	return s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
+		cur, err := s.repo.GetByID(txCtx, upd.ID)
 		if err != nil {
 			return err
 		}
-		return s.repo.Update(txCtx, updated)
-	})
-	if err != nil {
-		return nil, handler.ToStatus(err).Err()
-	}
-	return &emptypb.Empty{}, nil
-}
-
-// DeleteStudent handles a gRPC request to delete a student by ID.
-func (s *StudentServer) DeleteStudent(ctx context.Context, req *proto.DeleteStudentRequest) (*emptypb.Empty, error) {
-	err := s.txManager.WithTransaction(ctx, func(txCtx context.Context) error {
-		if err := s.repo.Delete(txCtx, req.Id); err != nil {
-			if errors.Is(err, repo.ErrNotFound) {
-				return d.ErrNotFound
-			}
+		if upd.CreatedAt.IsZero() {
+			upd.CreatedAt = cur.CreatedAt
+		}
+		if err := cur.CanUpdate(upd); err != nil {
 			return err
 		}
-		return nil
+		return s.repo.Update(txCtx, upd)
 	})
-	if err != nil {
-		return nil, handler.ToStatus(err).Err()
-	}
-	return &emptypb.Empty{}, nil
 }
 
-// ListStudents handles a gRPC request to return students by grade.
-func (s *StudentServer) ListStudents(ctx context.Context, req *proto.ListStudentsRequest) (*proto.ListStudentsResponse, error) {
-	items, err := s.repo.ListByGrade(ctx, req.Grade)
-	if err != nil {
-		return nil, handler.ToStatus(err).Err()
+// Delete removes a student by ID from the repository.
+func (s *Service) Delete(ctx context.Context, id string) error {
+	if id == "" {
+		return fmt.Errorf("%w: id is required", d.ErrInvalidArgument)
 	}
-	out := make([]*proto.Student, 0, len(items))
-	for i := range items {
-		out = append(out, mapper.RepoToProto(&items[i]))
+	return s.tx.WithTransaction(ctx, func(txCtx context.Context) error {
+		return s.repo.Delete(txCtx, id)
+	})
+}
+
+// List returns all students from the repository.
+func (s *Service) List(ctx context.Context) ([]d.Student, error) {
+	return s.repo.List(ctx)
+}
+
+// ListByGrade returns all students with the specified grade.
+func (s *Service) ListByGrade(ctx context.Context, grade int32) ([]d.Student, error) {
+	if grade <= 0 {
+		return s.repo.List(ctx)
 	}
-	return &proto.ListStudentsResponse{Students: out}, nil
+	return s.repo.ListByGrade(ctx, grade)
 }

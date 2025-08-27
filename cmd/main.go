@@ -15,7 +15,7 @@ import (
 const ConfigPath = "config.yaml"
 
 func main() {
-	cfg, err := config.LoadConfig(ConfigPath)
+	cfg, err := config.Load(ConfigPath)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
