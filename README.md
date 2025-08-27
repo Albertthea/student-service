@@ -157,6 +157,22 @@ Linting also runs on every push and pull request to main via GitHub Actions.
 
 Workflow config: .github/workflows/lint.yml
 
+gci (Imports Formatter)
+
+The project uses gci
+ (via golangci-lint) to enforce import grouping:
+
+Standard library
+
+Third-party dependencies
+
+Local project (example.com/student-service/...)
+
+To auto-fix import order, run:
+```bash
+golangci-lint run --fix
+```
+
 ## Requirements
 Go 1.20+
 Docker + docker-compose

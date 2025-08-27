@@ -10,7 +10,6 @@ import (
 	d "example.com/student-service/domain"
 	"example.com/student-service/service"
 	"example.com/student-service/service/mocks"
-
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"

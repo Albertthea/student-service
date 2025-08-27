@@ -14,64 +14,66 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// --- Create/Update ---
+//
+// Create / Update (proto -> repo)
+//
 
-// CreateReqToRepo converts a proto.CreateStudentRequest into a repo.Student
-// with the provided ID and timestamp.
+// CreateReqToRepo converts proto CreateStudentRequest into repo.Student,
+// using the provided id and timestamp as authoritative values.
 func CreateReqToRepo(id string, now time.Time, req *proto.CreateStudentRequest) (repo.Student, error) {
-	if req.Student == nil {
+	if req == nil || req.GetStudent() == nil {
 		return repo.Student{}, errors.New("student is required")
 	}
-	s := req.Student
-
-	st := repo.Student{
-		ID:           id,
-		FirstName:    s.FirstName,
-		LastName:     s.LastName,
-		Grade:        s.Grade,
-		CreatedAt:    now,
-		MiddleName:   ptrToNull(s.MiddleName),
-		Status:       enumToNull(s.Status),
-		HomeAddress:  jsonToBytes(s.HomeAddress),
-		CourseGrades: jsonToBytes(s.CourseGrades),
-		Friends:      s.Friends,
-	}
-
-	switch v := s.StudentDetails.(type) {
-	case *proto.Student_Local:
-		st.Local = jsonToBytes(v.Local)
-	case *proto.Student_Exchange:
-		st.Exchange = jsonToBytes(v.Exchange)
-	}
-	return st, nil
-}
-
-// UpdateReqToRepo maps an UpdateStudentRequest and current repository.Student into a new repository.Student.
-func UpdateReqToRepo(current *repo.Student, req *proto.UpdateStudentRequest) (repo.Student, error) {
-	if req.Student == nil {
-		return repo.Student{}, errors.New("student is required")
-	}
-	s := req.Student
+	s := req.GetStudent()
 
 	out := repo.Student{
-		ID:           s.Id,
-		FirstName:    s.FirstName,
-		LastName:     s.LastName,
-		Grade:        s.Grade,
-		CreatedAt:    current.CreatedAt,
-		MiddleName:   ptrToNull(s.MiddleName),
-		Status:       enumToNull(s.Status),
-		HomeAddress:  jsonToBytes(s.HomeAddress),
-		CourseGrades: jsonToBytes(s.CourseGrades),
-		Friends:      s.Friends,
+		ID:           id,
+		FirstName:    s.GetFirstName(),
+		LastName:     s.GetLastName(),
+		Grade:        s.GetGrade(),
+		CreatedAt:    now,
+		MiddleName:   strToNull(s.GetMiddleName()),
+		Status:       enumToNull(s.GetStatus()),
+		HomeAddress:  jsonToBytes(s.GetHomeAddress()),
+		CourseGrades: jsonToBytes(s.GetCourseGrades()),
+		Friends:      s.GetFriends(),
 	}
 
-	switch v := s.StudentDetails.(type) {
-	case *proto.Student_Local:
-		out.Local = jsonToBytes(v.Local)
+	if v := s.GetLocal(); v != nil {
+		out.Local = jsonToBytes(v)
+	}
+	if v := s.GetExchange(); v != nil {
+		out.Exchange = jsonToBytes(v)
+	}
+	return out, nil
+}
+
+// UpdateReqToRepo maps UpdateStudentRequest and current repo.Student into a new repo.Student.
+func UpdateReqToRepo(current *repo.Student, req *proto.UpdateStudentRequest) (repo.Student, error) {
+	if req == nil || req.GetStudent() == nil {
+		return repo.Student{}, errors.New("student is required")
+	}
+	s := req.GetStudent()
+
+	out := repo.Student{
+		ID:           s.GetId(),
+		FirstName:    s.GetFirstName(),
+		LastName:     s.GetLastName(),
+		Grade:        s.GetGrade(),
+		CreatedAt:    current.CreatedAt, // immutable
+		MiddleName:   strToNull(s.GetMiddleName()),
+		Status:       enumToNull(s.GetStatus()),
+		HomeAddress:  jsonToBytes(s.GetHomeAddress()),
+		CourseGrades: jsonToBytes(s.GetCourseGrades()),
+		Friends:      s.GetFriends(),
+	}
+
+	switch {
+	case s.GetLocal() != nil:
+		out.Local = jsonToBytes(s.GetLocal())
 		out.Exchange = nil
-	case *proto.Student_Exchange:
-		out.Exchange = jsonToBytes(v.Exchange)
+	case s.GetExchange() != nil:
+		out.Exchange = jsonToBytes(s.GetExchange())
 		out.Local = nil
 	default:
 		out.Local = current.Local
@@ -80,9 +82,7 @@ func UpdateReqToRepo(current *repo.Student, req *proto.UpdateStudentRequest) (re
 	return out, nil
 }
 
-// --- Repo → Proto ---
-
-// RepoToProto converts a repo.Student into a proto.Student for gRPC responses.
+// RepoToProto converts a repository.Student into a proto.Student.
 func RepoToProto(st *repo.Student) *proto.Student {
 	if st == nil {
 		return nil
@@ -114,9 +114,7 @@ func RepoToProto(st *repo.Student) *proto.Student {
 	return pb
 }
 
-// --- Domain → Repo ---
-
-// DomainToRepo converts a domain.Student into a repo.Student for persistence.
+// DomainToRepo converts a domain.Student into a repository.Student for persistence in the DB.
 func DomainToRepo(id string, now time.Time, dom d.Student) (repo.Student, error) {
 	st := repo.Student{
 		ID:           id,
@@ -129,11 +127,9 @@ func DomainToRepo(id string, now time.Time, dom d.Student) (repo.Student, error)
 		CourseGrades: jsonToBytes(dom.Course),
 		Friends:      dom.Friends,
 	}
-
 	if dom.Home != nil {
 		st.HomeAddress = jsonToBytes(dom.Home)
 	}
-
 	if dom.Details.Local != nil {
 		st.Local = jsonToBytes(dom.Details.Local)
 	} else if dom.Details.Exchange != nil {
@@ -142,8 +138,11 @@ func DomainToRepo(id string, now time.Time, dom d.Student) (repo.Student, error)
 	return st, nil
 }
 
-// --- helpers ---
+//
+// helpers
+//
 
+// ptrToNull converts *string to sql.NullString.
 func ptrToNull(s *string) sql.NullString {
 	if s == nil {
 		return sql.NullString{}
@@ -151,6 +150,15 @@ func ptrToNull(s *string) sql.NullString {
 	return sql.NullString{String: *s, Valid: true}
 }
 
+// strToNull converts string (from proto getter) to sql.NullString.
+func strToNull(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: s, Valid: true}
+}
+
+// nullToPtr converts sql.NullString to *string.
 func nullToPtr(ns sql.NullString) *string {
 	if !ns.Valid {
 		return nil
@@ -159,6 +167,7 @@ func nullToPtr(ns sql.NullString) *string {
 	return &v
 }
 
+// enumToNull converts enum to sql.NullString (unspecified -> NULL).
 func enumToNull(s proto.Student_Status) sql.NullString {
 	if s == proto.Student_STATUS_UNSPECIFIED {
 		return sql.NullString{}
@@ -166,6 +175,7 @@ func enumToNull(s proto.Student_Status) sql.NullString {
 	return sql.NullString{String: s.String(), Valid: true}
 }
 
+// jsonToBytes marshals value to JSON; nil (or JSON "null") -> nil slice.
 func jsonToBytes(v any) []byte {
 	if v == nil {
 		return nil
@@ -187,6 +197,7 @@ func jsonToBytes(v any) []byte {
 	return b
 }
 
+// parseStatus converts sql.NullString to proto enum.
 func parseStatus(ns sql.NullString) proto.Student_Status {
 	if !ns.Valid {
 		return proto.Student_STATUS_UNSPECIFIED
@@ -197,6 +208,7 @@ func parseStatus(ns sql.NullString) proto.Student_Status {
 	return proto.Student_STATUS_UNSPECIFIED
 }
 
+// parseHome unmarshals JSON into *proto.Student_Address.
 func parseHome(b []byte) *proto.Student_Address {
 	if len(b) == 0 {
 		return nil
@@ -208,6 +220,7 @@ func parseHome(b []byte) *proto.Student_Address {
 	return &a
 }
 
+// parseCourse unmarshals JSON into map[string]string.
 func parseCourse(b []byte) map[string]string {
 	if len(b) == 0 {
 		return nil

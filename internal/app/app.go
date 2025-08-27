@@ -8,18 +8,17 @@ import (
 	"net"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq" // PostgreSQL driver
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
-
 	"example.com/student-service/handler"
 	"example.com/student-service/internal/config"
 	"example.com/student-service/internal/txmanager"
 	pb "example.com/student-service/proto"
 	"example.com/student-service/repository/student"
 	"example.com/student-service/service"
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq" // PostgreSQL driver
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 // App holds the gRPC server and listener.

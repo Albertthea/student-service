@@ -8,18 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"example.com/student-service/internal/txmanager"
+	"example.com/student-service/repository/student"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	"example.com/student-service/internal/txmanager"
-	"example.com/student-service/repository/student"
-
-	_ "github.com/lib/pq"
 )
 
 //go:embed migrations/*.sql
