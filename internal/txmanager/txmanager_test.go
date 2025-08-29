@@ -1,20 +1,21 @@
 package txmanager_test
 
 import (
+	// stdlib
 	"context"
 	"errors"
 	"testing"
 	"time"
 
+	// internal
+	"example.com/student-service/internal/txmanager"
+	// external
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	_ "github.com/lib/pq"
-
-	"example.com/student-service/internal/txmanager"
 )
 
 type TxManagerTestSuite struct {

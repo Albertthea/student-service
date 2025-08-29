@@ -2,27 +2,26 @@ package student_test
 
 import (
 	"context"
-	_ "embed"
+	"embed"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"example.com/student-service/internal/txmanager"
+	"example.com/student-service/repository/student"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	"example.com/student-service/internal/txmanager"
-	"example.com/student-service/repository/student"
-
-	_ "github.com/lib/pq"
 )
 
-//go:embed migrations/00000_initial.sql
-var migrationSQL string
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 type RepoTestSuite struct {
 	suite.Suite
@@ -32,6 +31,7 @@ type RepoTestSuite struct {
 	repo      *student.Repository
 }
 
+// SetupSuite starts a Postgres container, applies goose migrations, and initializes the repository.
 func (s *RepoTestSuite) SetupSuite() {
 	s.ctx = context.Background()
 
@@ -55,13 +55,27 @@ func (s *RepoTestSuite) SetupSuite() {
 	s.Require().NoError(err)
 	s.Require().NoError(waitForDB(db))
 
-	_, err = db.Exec(migrationSQL)
+	// Apply only Up sections from embedded migrations via goose.
+	goose.SetBaseFS(migrationsFS)
+	s.Require().NoError(goose.SetDialect("postgres"))
+	s.Require().NoError(goose.Up(db.DB, "migrations"))
+
+	// Sanity check: the table must exist after migrations.
+	var exists bool
+	err = db.Get(&exists, `
+		SELECT EXISTS (
+		  SELECT 1
+		  FROM information_schema.tables
+		  WHERE table_schema = 'public' AND table_name = 'students'
+		)`)
 	s.Require().NoError(err)
+	s.Require().True(exists, "table 'students' must exist after migrations")
 
 	s.db = db
 	s.repo = student.NewRepository(db)
 }
 
+// TestCreateGetUpdateDeleteStudent verifies CRUD operations on the repository.
 func (s *RepoTestSuite) TestCreateGetUpdateDeleteStudent() {
 	txMgr := txmanager.NewManager(s.repo.DB())
 
@@ -81,14 +95,12 @@ func (s *RepoTestSuite) TestCreateGetUpdateDeleteStudent() {
 	s.Require().NoError(err)
 	s.Require().NotEmpty(id)
 
-	// Get after transaction committed
 	got, err := s.repo.GetByID(s.ctx, id)
 	s.Require().NoError(err)
 	s.Equal("Ivan", got.FirstName)
 	s.Equal("Ivanov", got.LastName)
 	s.Equal(int32(5), got.Grade)
 
-	// Update inside transaction
 	got.LastName = "Petrov"
 	got.Grade = 6
 	err = txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
@@ -96,30 +108,26 @@ func (s *RepoTestSuite) TestCreateGetUpdateDeleteStudent() {
 	})
 	s.Require().NoError(err)
 
-	// Get updated
 	updated, err := s.repo.GetByID(s.ctx, id)
 	s.Require().NoError(err)
 	s.Equal("Petrov", updated.LastName)
 	s.Equal(int32(6), updated.Grade)
 
-	// Delete inside transaction
 	err = txMgr.WithTransaction(s.ctx, func(ctx context.Context) error {
 		return s.repo.Delete(ctx, id)
 	})
 	s.Require().NoError(err)
 
-	// Verify deletion
 	_, err = s.repo.GetByID(s.ctx, id)
 	s.Require().Error(err)
 	s.ErrorIs(err, student.ErrNotFound)
 }
 
+// TestListAndListByGrade verifies listing all students and filtering by grade.
 func (s *RepoTestSuite) TestListAndListByGrade() {
 	txMgr := txmanager.NewManager(s.repo.DB())
 
-	_, _, err := s.container.Exec(s.ctx, []string{
-		"psql", "-U", "postgres", "-d", "testdb", "-c", "DELETE FROM students;",
-	})
+	_, err := s.db.ExecContext(s.ctx, `DELETE FROM students`)
 	s.Require().NoError(err)
 
 	grades := []int32{1, 2, 2, 3}
@@ -150,18 +158,21 @@ func (s *RepoTestSuite) TestListAndListByGrade() {
 	s.Empty(none)
 }
 
+// TearDownSuite closes DB and stops the container.
 func (s *RepoTestSuite) TearDownSuite() {
 	if err := s.db.Close(); err != nil {
-		s.T().Logf("Error closing DB: %v", err)
+		s.T().Logf("error closing DB: %v", err)
 	}
 	err := s.container.Terminate(s.ctx)
 	s.Require().NoError(err)
 }
 
+// TestRepoTestSuite runs the repository test suite.
 func TestRepoTestSuite(t *testing.T) {
 	suite.Run(t, new(RepoTestSuite))
 }
 
+// waitForDB polls the DB until it responds to Ping.
 func waitForDB(db *sqlx.DB) error {
 	const maxAttempts = 10
 	const delay = time.Second

@@ -5,41 +5,60 @@ import (
 	"strings"
 )
 
-// Columns holds the list of all column names in the students table.
-var Columns = [...]string{"id", "first_name", "last_name", "grade", "created_at"}
+// Columns lists all column names of the students table in a stable order.
+// The order is used to build INSERT/SELECT/UPDATE statements.
+var Columns = [...]string{
+	"id",
+	"first_name",
+	"last_name",
+	"grade",
+	"created_at",
+	"middle_name",
+	"status",
+	"home_address",
+	"course_grades",
+	"friends",
+	"local",
+	"exchange",
+}
 
-// ColumnsStr returns a comma-separated string of all columns.
+// ColumnsStr returns a comma-separated string of all columns in Columns.
 func ColumnsStr() string {
 	return strings.Join(Columns[:], ", ")
 }
 
-// Placeholders generates a string of parameter placeholders for SQL queries.
-func Placeholders(n int) string {
-	params := make([]string, n)
-	for i := 0; i < n; i++ {
-		params[i] = fmt.Sprintf("$%d", i+1)
+// placeholderFor returns a placeholder for a given column with proper casting.
+// For JSONB columns we accept []byte and convert bytea -> text -> jsonb.
+// NULL or empty becomes NULL.
+func placeholderFor(col string) string {
+	switch col {
+	case "home_address", "course_grades", "local", "exchange":
+		// text -> jsonb. NULL останется NULL без ошибки парсинга
+		return fmt.Sprintf("CAST(:%s AS jsonb)", col)
+	default:
+		return ":" + col
 	}
-	return "(" + strings.Join(params, ", ") + ")"
 }
 
-// NamedPlaceholders returns a string of named SQL placeholders for all columns.
+// NamedPlaceholders returns a parenthesized, comma-separated list of
+// placeholders aligned with Columns, suitable for INSERT ... VALUES (...).
 func NamedPlaceholders() string {
-	var placeholders []string
+	parts := make([]string, 0, len(Columns))
 	for _, col := range Columns {
-		placeholders = append(placeholders, ":"+col)
+		parts = append(parts, placeholderFor(col))
 	}
-	return "(" + strings.Join(placeholders, ", ") + ")"
+	return "(" + strings.Join(parts, ", ") + ")"
 }
 
-// UpdateSetStr returns the SET clause string for an UPDATE query.
-// For example: "first_name = $1, last_name = $2, grade = $3, created_at = $4"
+// UpdateSetStr returns the SET clause for UPDATE with named placeholders,
+// skipping the primary key column "id".
 func UpdateSetStr() string {
-	var sets []string
+	sets := make([]string, 0, len(Columns)-1)
 	for _, col := range Columns {
 		if col == "id" {
 			continue
 		}
-		sets = append(sets, fmt.Sprintf("%s = :%s", col, col))
+		sets = append(sets, fmt.Sprintf("%s = %s", col, placeholderFor(col)))
 	}
 	return strings.Join(sets, ", ")
 }

@@ -11,6 +11,14 @@ linters:
     - revive
     - errcheck
     - unused
+    - protogetter
+    - gci
+    - goconst
+    - dupl
+
+linters-settings:
+  protogetter:
+    check-generated: false 
 
 issues:
   exclude-use-default: false
@@ -19,4 +27,3 @@ issues:
       linters:
         - gofmt
         - goimports
-        - golint
