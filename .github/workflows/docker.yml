@@ -2,17 +2,17 @@ name: build-and-push
 
 on:
   push:
-    branches: 
+    branches:
       - main
       - deploy1
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }} #ghcr.io/albertthea/student-service
+  workflow_dispatch: {}
 
 permissions:
   contents: read
   packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   docker:
@@ -21,7 +21,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Compute lowercase image name
+        run: echo "IMAGE=${{ env.REGISTRY }}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
@@ -31,22 +34,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker metadata
+      - name: Docker metadata (tags & labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE }}
           tags: |
-            type=ref,event=branch
-            type=sha
-            type=ref,event=tag
+            type=ref,event=branch       # :<branch>
+            type=sha,format=short       # :sha-<short>
+            type=ref,event=tag          # :<git-tag>, если поставишь git tag
 
-      - name: Build and Push Docker image
+      - name: Build and Push
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ./Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            GO_VERSION=1.23
+            BIN_NAME=student-service
