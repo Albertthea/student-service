@@ -1,0 +1,36 @@
+# --- Go build artifacts ---
+/student-service
+/bin/
+/out/
+/dist/
+/build/
+
+# Object files, test binaries
+*.o
+*.a
+*.so
+*.test
+*.exe
+
+# --- Dependency management ---
+/vendor/
+
+# --- IDE and editor settings ---
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+
+# --- Logs & temp ---
+*.log
+*.tmp
+*.cache/
+
+# --- Docker ---
+*.pid
+.env
+docker-compose.override.yml
