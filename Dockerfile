@@ -15,15 +15,16 @@ COPY . .
 # Build from ./cmd, because that's where main.go lives
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w -extldflags '-static'" \
-    -o /out/${BIN_NAME} ./cmd
+    -o /out/student-service ./cmd
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
 
-COPY --from=build /out/${BIN_NAME} /app/${BIN_NAME}
+COPY --from=build /out/student-service /app/student-service
 COPY config.yaml /app/config.yaml
 ENV CONFIG_PATH=/app/config.yaml
 
 EXPOSE 50051
 USER nonroot:nonroot
 ENTRYPOINT ["/app/student-service"]
+
