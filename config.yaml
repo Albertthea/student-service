@@ -2,8 +2,9 @@ server:
   port: 50051
 
 postgresql:
-  host: localhost
+  host: postgres
   port: 5434
+  dbname: studentdb
   authorisation:
     env:
       login: POSTGRESQL_LOGIN
