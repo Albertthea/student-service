@@ -211,3 +211,55 @@ For verbose output:
 ```bash
 go test -v ./...
 ```
+
+## How to review (CLI with grpcurl)
+
+Verify the running service remotely using grpcurl over the public IP of VM.
+
+- Public VM IP: `13.60.34.174`
+- Port: `50051`
+
+Prerequisites
+
+Install grpcurl (via your package manager).
+
+Clone this repo to get the .proto file and run commands from the repo root.
+
+```bash
+git clone https://github.com/Albertthea/student-service.git
+cd student-service
+```
+
+List students (baseline)
+```bash
+grpcurl -plaintext \
+  -import-path ./proto -proto ./proto/student.proto \
+  <PUBLIC_IP_HERE>:50051 student.StudentService/ListStudents -d '{}'
+```
+
+
+Create a student
+```bash
+grpcurl -plaintext \
+  -import-path ./proto -proto ./proto/student.proto \
+  -d '{
+    "student": {
+      "firstName": "Ivan",
+      "lastName": "Petrov",
+      "grade": 9,
+      "status": "ACTIVE",
+      "homeAddress": { "street": "Lenina 1", "city": "Moscow", "country": "RU" },
+      "local": { "nationalId": "1234567890", "scholarship": true },
+      "friends": [],
+      "courseGrades": { "math": "A" }
+    }
+  }' \
+  <PUBLIC_IP_HERE>:50051 student.StudentService/CreateStudent
+```
+
+List again (should include the created record)
+```bash
+grpcurl -plaintext \
+  -import-path ./proto -proto ./proto/student.proto \
+  <PUBLIC_IP_HERE>:50051 student.StudentService/ListStudents -d '{}'
+  ```
